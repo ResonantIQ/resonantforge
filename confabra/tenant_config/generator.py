@@ -153,10 +153,10 @@ def generate_tenant_config(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     config_dict = _build_config_dict(profile)
-    content_hash = _sha256_of_dict(config_dict)
 
     dest = output_dir / "tenant_config.json"
     canonical_json = json.dumps(config_dict, sort_keys=True, indent=2, ensure_ascii=False)
+    content_hash = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
     dest.write_text(canonical_json, encoding="utf-8")
 
     return config_dict, content_hash
