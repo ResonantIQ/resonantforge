@@ -1,1 +1,4 @@
-"""Lexicons — domain-specific vocabulary lists for signal extraction."""
+"""Per-profile curated lexicons for feature extraction."""
+from confabra.profiles.lexicons import saas, ps
+
+__all__ = ["saas", "ps"]
