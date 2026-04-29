@@ -470,6 +470,11 @@ class AgentProfile(BaseModel):
     Each agent is deterministically associated with a tenant, a skill profile,
     and a history type. The history type controls how scores evolve over the
     simulation timeline (e.g. IMPROVING agents trend upward month-over-month).
+
+    ``name`` is a human-readable display name for the synthetic agent.
+    ``linked_conversation_id`` pins this agent to one conversation from the
+    organic corpus so that downstream layers can retrieve a representative
+    sample without a full table scan.
     """
 
     agent_id: str
@@ -477,6 +482,8 @@ class AgentProfile(BaseModel):
     history_type: HistoryType
     tenure_days: int
     skill_profile: SkillProfile
+    name: str = ""
+    linked_conversation_id: Optional[str] = None
 
 
 class CoachingEvent(BaseModel):
