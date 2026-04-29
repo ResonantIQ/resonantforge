@@ -1,0 +1,1 @@
+"""Confabra test suite."""
