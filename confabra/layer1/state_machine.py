@@ -16,7 +16,8 @@ from confabra.layer1.sim_events import validate_event_payload
 from confabra.layer1.clocks import ClockRegistry
 
 # ---------------------------------------------------------------------------
-# Industry fallback list (used until the Profile interface is built in Task 14)
+# Industry fallback list (kept for backward-compat with duck-typed FakeProfile
+# in existing tests; real Profile objects use profile.name instead).
 # ---------------------------------------------------------------------------
 
 FALLBACK_INDUSTRIES = [
@@ -29,7 +30,8 @@ FALLBACK_INDUSTRIES = [
 
 
 # ---------------------------------------------------------------------------
-# Profile protocol — duck-typed so Task 14 profiles work without inheritance
+# Profile protocol — duck-typed so both FakeProfile (tests) and real Profile
+# subclasses (Task 14) satisfy the interface without forcing inheritance.
 # ---------------------------------------------------------------------------
 
 
@@ -37,11 +39,18 @@ class Profile(Protocol):
     """
     Minimal protocol that Layer 1 requires from a Layer 2 industry profile.
 
-    ``lifecycle_stages`` is deliberately not called in state_machine.py — the
-    protocol exists only to type-annotate the ``profile`` parameter.  Industry
-    selection in ``generate_accounts`` uses ``FALLBACK_INDUSTRIES`` until full
-    profile support is wired in Task 14.
+    Real Profile subclasses (SaaSProfile, PSProfile) satisfy this protocol
+    via inheritance.  FakeProfile in tests satisfies it via duck typing.
+
+    ``name`` is used by ``generate_accounts`` to label the industry column
+    when a real Profile is provided; ``FALLBACK_INDUSTRIES`` is used only when
+    the profile's name is not available (legacy duck-typed callers).
     """
+
+    @property
+    def name(self) -> str:
+        """Short identifier for this profile, e.g. 'saas'."""
+        ...
 
     def lifecycle_stages(self) -> list[str]:
         """Return the list of lifecycle stage labels supported by this profile."""
@@ -188,7 +197,11 @@ class StateMachine:
                 f"agent_{self.rng.randint(1, 12):03d}" for _ in range(num_agents)
             ]
 
-            industry = self.rng.choice(FALLBACK_INDUSTRIES)
+            # Use the real profile's name when available; fall back to the
+            # legacy FALLBACK_INDUSTRIES list for duck-typed FakeProfile callers
+            # that do not expose a ``name`` property.
+            profile_name = getattr(self.profile, "name", None)
+            industry = profile_name if profile_name else self.rng.choice(FALLBACK_INDUSTRIES)
             base_price = self.rng.choice(base_prices)
             monthly_arr = base_price * plan_multipliers[plan]
 
