@@ -125,6 +125,16 @@ def _build_conv_pool(
     When ``organic_conversation_ids`` is non-empty the pool is drawn from it
     (cycling if needed).  When empty — e.g. during standalone testing — the
     pool is populated with synthetic IDs seeded from *rng*.
+
+    .. note::
+        **Minimum safe size for organic IDs.**  When ``organic_conversation_ids``
+        is provided but contains fewer unique IDs than there are distinct slots
+        across all trajectory rows, the cycling logic will repeat IDs — multiple
+        trajectory rows will reference the same conversation.  This is harmless
+        for schema validity but produces unrealistic fixtures where different
+        scoring events appear to reference the same conversation.  Callers
+        should provide at least 50 organic conversation IDs to avoid duplicate
+        references in trajectory fixtures.
     """
     if organic_conversation_ids:
         pool: list[str] = []
@@ -241,8 +251,10 @@ def _pick_triggering_conv(
     else:
         eligible = all_rows
     if not eligible:
-        # Fallback: any row in the full list (should not happen in a well-formed call).
-        eligible = all_rows
+        raise ValueError(
+            f"_pick_triggering_conv: no trajectory rows precede {before_ts}; "
+            "causal-anchor invariant cannot be satisfied."
+        )
     recent = eligible[-5:] if len(eligible) >= 5 else eligible
     return rng.choice(recent)["conversation_id"]
 
