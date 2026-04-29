@@ -133,7 +133,7 @@ class ConversationRecord(BaseModel):
     prose: str  # full generated conversation text
     trigger_event_id: str
     is_planted_quality: bool = False
-    tone_contamination_marker: Optional[float] = None  # fraction 0.0–1.0
+    tone_contamination_marker: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
 
 
 class AccuracyLabel(BaseModel):
@@ -232,7 +232,7 @@ class KBChunk(BaseModel):
     superseded_by: Optional[str] = None  # chunk_id of newer version
     counterintuitive: bool = False
     cat11_gate: Optional[str] = None  # which gate this chunk supports
-    tone_contamination_marker: Optional[float] = None
+    tone_variant: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -515,7 +515,7 @@ class TrajectoryRow(BaseModel):
     scored_at: datetime
     coaching_phase: Literal["pre_coaching", "post_coaching", "uncoached"]
     post_coaching_of: Optional[str] = None  # coaching_id reference
-    tone_contamination_marker: Optional[float] = None
+    tone_contamination_marker: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
 
     @field_validator("ai_score")
     @classmethod
