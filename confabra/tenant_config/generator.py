@@ -64,10 +64,18 @@ def _build_config_dict(profile: Profile) -> dict[str, Any]:
     - ``knowledge_base_subset`` — ``"all"`` (no subsetting in v1)
     - ``rubric_weights`` — platform defaults (empathy 0.25, resolution 0.30,
       brand_voice 0.20, accuracy 0.25); sum is 1.0
+
+    The profile is responsible for returning the correct variant count
+    (SaaS: 3, PS: 1).  This function validates only that the list is
+    non-empty; a zero-variant result is always a profile implementation bug.
     """
     tenant_id = f"tenant_{profile.name}_v1"
 
     variants = profile.brand_voice_variants()
+    if not variants:
+        raise ValueError(
+            f"Profile '{profile.name}' returned no brand voice variants"
+        )
     brand_voice_dicts = [_variant_to_dict(v) for v in variants]
 
     # coaching_style_overlays is always empty at the scaffolding stage;
@@ -123,6 +131,10 @@ def generate_tenant_config(
 
     The returned ``content_hash`` is a SHA-256 hex digest suitable for embedding
     in the corpus manifest's ``tenant_config_hash`` field.
+
+    The profile is responsible for returning the correct variant count
+    (SaaS: 3, PS: 1).  The generator trusts the profile but raises
+    :exc:`ValueError` if the profile returns zero variants.
 
     Parameters
     ----------
