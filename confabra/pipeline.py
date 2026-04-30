@@ -209,10 +209,15 @@ def _call_anthropic(
     Call the Anthropic API and return the generated text plus cache usage counters.
 
     Uses claude-haiku-4-5-20251001 with a conservative max_tokens to keep costs
-    reasonable during corpus generation runs.  The system prompt is wrapped with
-    an ephemeral cache_control block — the prefix is byte-stable within a run
-    (only profile_name varies, and that is constant per pipeline execution).
-    Raises on API errors — the caller handles retries.
+    reasonable during corpus generation runs.  Raises on API errors — the caller
+    handles retries.
+
+    Prompt caching was evaluated and removed: the system prompt at ~83 tokens is
+    25× below Haiku's 2048-token minimum cache threshold, so cache_control blocks
+    were silently ignored by the API.  See docs/resonantforge/cache-diagnosis.md.
+    The return shape still includes (text, 0, 0) to keep the cache telemetry shell
+    in _run_pipeline_inner intact — re-enabling caching only requires updating this
+    function and crossing the token threshold.
 
     Args:
         api_key:       Anthropic API key.
@@ -221,8 +226,7 @@ def _call_anthropic(
 
     Returns:
         Tuple of (prose_text, cache_creation_input_tokens, cache_read_input_tokens).
-        Token counts are 0 when not reported by the API (e.g. first call in a run
-        writes the cache, subsequent calls read it).
+        Cache token counts are always 0 — caching is not active (see above).
     """
     if not ANTHROPIC_AVAILABLE:
         raise RuntimeError(
@@ -232,17 +236,12 @@ def _call_anthropic(
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,
-        system=[
-            {
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
+        system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
     )
-    cache_creation = getattr(response.usage, "cache_creation_input_tokens", 0) or 0
-    cache_read = getattr(response.usage, "cache_read_input_tokens", 0) or 0
+    # Caching removed — always return 0 for cache counters.
+    # See function docstring for full rationale.
+    cache_creation, cache_read = 0, 0
     # Extract text from the first content block.
     for block in response.content:
         if hasattr(block, "text"):
