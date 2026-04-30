@@ -555,6 +555,10 @@ def run_pipeline(config: PipelineConfig) -> Manifest:
             dominant_variant="bv_baseline" if "bv_baseline" in bv_variants else bv_variants[0],
         )
         kb_chunks = injector_cc.contaminate_kb_chunks(kb_chunks)
+        # Re-write chunks.jsonl with the contaminated chunk list so that
+        # tone_variant annotations are persisted to disk.
+        chunks_meta_path = profile_dir / "knowledge_base" / "chunks.jsonl"
+        _write_jsonl(chunks_meta_path, [chunk.model_dump_json() for chunk in kb_chunks])
     else:
         _log(config, "  Skipping cross-contamination (fewer than 2 brand voice variants)")
 
