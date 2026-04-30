@@ -101,10 +101,12 @@ def generate(
     resolved_accounts, resolved_months = _resolve_profile_defaults(profile, accounts, months)
 
     # Resolve output directory.
+    # pipeline.py appends profile.name internally, so pass the parent dir.
+    # Default: ./corpus  →  pipeline writes to ./corpus/<profile>/
     if out is not None:
         output_dir = Path(out)
     else:
-        output_dir = Path("corpus") / profile
+        output_dir = Path("corpus")
 
     # --dry-run overrides any API key: treat as None (no LLM calls).
     effective_api_key: Optional[str] = None if dry_run else api_key
@@ -149,7 +151,7 @@ def generate(
     table.add_row("Agents", str(manifest.agent_count))
     table.add_row("KB docs", str(manifest.knowledge_base_doc_count))
     table.add_row("KB chunks", str(manifest.knowledge_base_chunk_count))
-    table.add_row("Output dir", str(output_dir / manifest.profile_name))
+    table.add_row("Output dir", str(output_dir / manifest.profile_name))  # profile subdir
 
     console.print(table)
     console.print("[bold green]Done.[/bold green]")
