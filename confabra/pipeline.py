@@ -45,6 +45,7 @@ from confabra.schemas import (
     QualityPlan,
     SimEvent,
     SimEventType,
+    SkippedConversationRecord,
     ValidationVerdict,
 )
 from confabra.tenant_config.generator import generate_tenant_config
@@ -566,6 +567,64 @@ def _build_conversation_signals(
 # ---------------------------------------------------------------------------
 
 
+def _make_skipped_record(
+    conv_id: str,
+    account_id: str,
+    conv_event: SimEvent,
+    quality_plan: QualityPlan | None,
+    final_retry_count: int,
+    validator_verdicts: list,
+    prose: str | None,
+) -> SkippedConversationRecord:
+    """
+    Build a SkippedConversationRecord from the state at a skip point.
+
+    Args:
+        conv_id:            Conversation ID being skipped.
+        account_id:         Account the conversation belongs to.
+        conv_event:         The CONVERSATION_STARTED event for this chunk.
+        quality_plan:       Quality plan if planted, None if organic.
+        final_retry_count:  Number of the attempt on which the skip occurred.
+        validator_verdicts: Per-dimension verdicts from the last validation run.
+        prose:              Generated prose from the last attempt, or None.
+
+    Returns:
+        SkippedConversationRecord with all available context populated.
+    """
+    quality_plan_summary: dict | None = None
+    kb_chunks_required: list | None = None
+    if quality_plan is not None:
+        rt = quality_plan.rubric_targets
+        quality_plan_summary = {
+            "empathy": rt.empathy,
+            "resolution": rt.resolution,
+            "brand_voice_target": rt.brand_voice_target,
+            "accuracy_status": rt.accuracy.status if rt.accuracy else None,
+            "accuracy_precision": rt.accuracy.precision if rt.accuracy else None,
+        }
+        kb_chunks_required = quality_plan.kb_chunks_required
+
+    return SkippedConversationRecord(
+        conversation_id=conv_id,
+        account_id=account_id,
+        event_id=quality_plan.trigger_event_id if quality_plan else conv_event.event_id,
+        quality_plan_summary=quality_plan_summary,
+        final_retry_count=final_retry_count,
+        final_verdicts=[
+            {
+                "dimension": v.dimension,
+                "verdict": v.verdict.value if hasattr(v.verdict, "value") else str(v.verdict),
+                "target": v.target,
+                "signals_summary": v.signals_summary,
+            }
+            for v in validator_verdicts
+        ],
+        agent_prose_snippet=prose[:200] if prose else None,
+        kb_chunks_required=kb_chunks_required,
+        timestamp=datetime.now(tz=timezone.utc).isoformat(),
+    )
+
+
 def _generate_prose_for_chunk(
     conv_id: str,
     account_id: str,
@@ -582,6 +641,7 @@ def _generate_prose_for_chunk(
     anthropic_client: "anthropic.Anthropic | None",
     kb_chunks: list,
     ledger: DisagreementLedger,
+    skipped_records: "list[SkippedConversationRecord]",
 ) -> ConversationRecord | None:
     """
     Generate prose for one (account_id, month_index, conv_event) chunk.
@@ -613,6 +673,8 @@ def _generate_prose_for_chunk(
         anthropic_client:  Pre-initialized Anthropic client, or None for dry-run.
         kb_chunks:         All KB chunks from Phase 2 (used by accuracy extractor).
         ledger:            DisagreementLedger accumulating soft-judge records.
+        skipped_records:   Accumulator list; a SkippedConversationRecord is appended
+                           here whenever this function returns None.
 
     Returns:
         A ConversationRecord on success, or None if the chunk was skipped.
@@ -633,6 +695,10 @@ def _generate_prose_for_chunk(
                 config,
                 f"  PRE-PROMPT FAIL (skip) {conv_id}: {pre_result.skip_reason}",
             )
+            skipped_records.append(_make_skipped_record(
+                conv_id, account_id, conv_event, quality_plan,
+                final_retry_count=0, validator_verdicts=[], prose=None,
+            ))
             return None
 
     # ------------------------------------------------------------------
@@ -650,6 +716,7 @@ def _generate_prose_for_chunk(
 
     max_retries = 2
     prose: str | None = None
+    last_validator_verdicts: list = []  # updated after each validation run; used for skip records
 
     for attempt in range(max_retries + 1):
         if anthropic_client is None:
@@ -677,6 +744,11 @@ def _generate_prose_for_chunk(
                 if attempt >= max_retries:
                     skip_tracker.prose_fact_failures += 1
                     skip_tracker.total_skipped += 1
+                    skipped_records.append(_make_skipped_record(
+                        conv_id, account_id, conv_event, quality_plan,
+                        final_retry_count=attempt, validator_verdicts=last_validator_verdicts,
+                        prose=prose,
+                    ))
                     return None
                 continue
 
@@ -746,6 +818,7 @@ def _generate_prose_for_chunk(
                 variant_id,
                 feature_profiles,
             )
+            last_validator_verdicts = validator_verdicts
 
             # Soft-judge on FAIL verdicts — non-gating, diagnostic only.
             for verdict in validator_verdicts:
@@ -773,6 +846,11 @@ def _generate_prose_for_chunk(
                 skip_tracker.prose_fact_failures += 1
                 skip_tracker.total_skipped += 1
                 _log(config, f"  POST-GEN SKIP {conv_id}: {post_result.skip_reason}")
+                skipped_records.append(_make_skipped_record(
+                    conv_id, account_id, conv_event, quality_plan,
+                    final_retry_count=attempt, validator_verdicts=validator_verdicts,
+                    prose=prose,
+                ))
                 return None
             else:  # FAIL — retry on next attempt
                 _log(config, f"  POST-GEN FAIL (attempt {attempt + 1}) {conv_id}")
@@ -784,10 +862,19 @@ def _generate_prose_for_chunk(
         # Retry loop exhausted without break (should not occur — SKIP path returns above).
         skip_tracker.prose_fact_failures += 1
         skip_tracker.total_skipped += 1
+        skipped_records.append(_make_skipped_record(
+            conv_id, account_id, conv_event, quality_plan,
+            final_retry_count=max_retries, validator_verdicts=last_validator_verdicts,
+            prose=prose,
+        ))
         return None
 
     if prose is None:
         skip_tracker.total_skipped += 1
+        skipped_records.append(_make_skipped_record(
+            conv_id, account_id, conv_event, quality_plan,
+            final_retry_count=0, validator_verdicts=[], prose=None,
+        ))
         return None
 
     return _make_conversation_record(
@@ -945,7 +1032,7 @@ def _run_pipeline_inner(
     # Group CONVERSATION_STARTED events by (account_id, month_index).
     # Each group represents one organic conversation chunk.
     all_conversations: list[ConversationRecord] = []
-    skipped_conv_ids: list[str] = []
+    skipped_records: list[SkippedConversationRecord] = []
 
     # Iterate deterministically: all accounts, all months, all conv events in
     # the order they appear in the event log.
@@ -982,17 +1069,18 @@ def _run_pipeline_inner(
             anthropic_client=anthropic_client,
             kb_chunks=kb_chunks,
             ledger=ledger,
+            skipped_records=skipped_records,
         )
 
         if result is None:
-            skipped_conv_ids.append(conv_id)
+            pass  # SkippedConversationRecord was appended to skipped_records inside the call
         else:
             all_conversations.append(result)
 
     _log(
         config,
         f"  {len(all_conversations)} conversations generated, "
-        f"{len(skipped_conv_ids)} skipped",
+        f"{len(skipped_records)} skipped",
     )
 
     # Wire disagreement ledger stats into skip_tracker for manifest output.
@@ -1079,8 +1167,8 @@ def _run_pipeline_inner(
     planted_quality_hash = _sha256_jsonl(plan_lines)
     atomic_write_jsonl(profile_dir / "planted_quality.jsonl", plan_lines)
 
-    # Serialise skipped conversation IDs.
-    skipped_lines = [json.dumps({"conversation_id": cid}) for cid in skipped_conv_ids]
+    # Serialise skipped conversation records (enriched with verdict/prose context).
+    skipped_lines = [r.model_dump_json() for r in skipped_records]
     atomic_write_jsonl(profile_dir / "skipped_conversations.jsonl", skipped_lines)
 
     # Serialise disagreement ledger (empty in dry-run or when no FAIL verdicts occurred).
@@ -1099,7 +1187,7 @@ def _run_pipeline_inner(
         event_count=len(events),
         snapshot_count=len(snapshots),
         conversation_count=len(all_conversations),
-        skipped_conversation_count=len(skipped_conv_ids),
+        skipped_conversation_count=len(skipped_records),
         planted_quality_count=len(quality_plans),
         knowledge_base_doc_count=kb_doc_count,
         knowledge_base_chunk_count=kb_chunk_count,
@@ -1129,7 +1217,7 @@ def _run_pipeline_inner(
     _log(
         config,
         f"Done. {len(all_conversations)} conversations, "
-        f"{len(quality_plans)} planted, {len(skipped_conv_ids)} skipped.",
+        f"{len(quality_plans)} planted, {len(skipped_records)} skipped.",
     )
 
     return manifest

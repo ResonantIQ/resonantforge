@@ -405,6 +405,27 @@ class ValidationResult(BaseModel):
     retry_count: int = 0
 
 
+class SkippedConversationRecord(BaseModel):
+    """
+    Records full context for a conversation skipped after exhausting prose retries.
+
+    Written to skipped_conversations.jsonl so rejected conversations can be
+    debugged without re-running the pipeline.  All fields are present for
+    POST-GEN SKIP paths; pre-prompt and API-error skips may have None prose
+    and empty verdicts.
+    """
+
+    conversation_id: str
+    account_id: str
+    event_id: Optional[str]
+    quality_plan_summary: Optional[dict[str, Any]]
+    final_retry_count: int
+    final_verdicts: list[dict[str, Any]]
+    agent_prose_snippet: Optional[str]
+    kb_chunks_required: Optional[list[str]]
+    timestamp: str
+
+
 class DisagreementRecord(BaseModel):
     """
     Records a disagreement between the rule-based validator and the soft judge.

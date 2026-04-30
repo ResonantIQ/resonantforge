@@ -865,6 +865,92 @@ def test_disagreement_ledger_populated(tmp_path: Path) -> None:
     )
 
 
+def test_skipped_record_fields_complete(tmp_path: Path) -> None:
+    """
+    Assertion 28: when a planted conversation is SKIPped after post-generation
+    validation, the JSONL record in skipped_conversations.jsonl contains all
+    enriched fields with non-null values.
+
+    Uses unittest.mock to inject a FAIL verdict and force a SKIP outcome so that
+    the enriched SkippedConversationRecord write path is exercised without a live key.
+    """
+    from unittest.mock import patch
+
+    _FAKE_PROSE = (
+        "Customer: I need help with my account.\n"
+        "Agent: I'd be happy to help you today. What seems to be the issue?\n"
+        "Customer: I can't access the dashboard.\n"
+        "Agent: I understand. Let me look into that for you right away."
+    )
+
+    _fail_verdict = DimensionVerdict(
+        dimension="empathy",
+        verdict=ValidationVerdict.FAIL,
+        target="high",
+        signals_summary={"acknowledgment_present": False},
+    )
+
+    _skip_result = ValidationResult(
+        conversation_id="mocked",
+        overall_verdict=ValidationVerdict.SKIP,
+        dimension_verdicts=[_fail_verdict],
+        skip_reason="mocked SKIP for test_skipped_record_fields_complete",
+        retry_count=2,
+    )
+
+    with (
+        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("confabra.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
+        patch(
+            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            return_value=_skip_result,
+        ),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=2,
+            months=1,
+            seed=42,
+            output_root=tmp_path,
+            anthropic_api_key="fake-key-for-fields-test",
+        )
+        run_pipeline(config)
+
+    skipped_path = tmp_path / "saas" / "skipped_conversations.jsonl"
+    skipped = _read_jsonl(skipped_path)
+    assert len(skipped) > 0, (
+        "Assertion 28 — skipped_conversations.jsonl is empty, expected at least one "
+        "SKIPped record from the mocked validator"
+    )
+
+    required_fields = [
+        "conversation_id",
+        "account_id",
+        "event_id",
+        "quality_plan_summary",
+        "final_retry_count",
+        "final_verdicts",
+        "agent_prose_snippet",
+        "kb_chunks_required",
+        "timestamp",
+    ]
+
+    violations: list[str] = []
+    for rec in skipped:
+        for field in required_fields:
+            if field not in rec or rec[field] is None:
+                violations.append(
+                    f"conv_id={rec.get('conversation_id')!r}: "
+                    f"field {field!r} missing or null (got {rec.get(field)!r})"
+                )
+
+    # Assertion 28
+    assert not violations, (
+        f"Assertion 28 — {len(violations)} skipped record field violation(s):\n"
+        + "\n".join(f"  {v}" for v in violations[:5])
+    )
+
+
 def test_variant_id_non_null_for_validated_convs(corpus: tuple[Path, Manifest]) -> None:
     """
     Assertion 27 (OQ2): every quality plan has an effective non-null variant_id
