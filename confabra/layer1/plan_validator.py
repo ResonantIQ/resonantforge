@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 from confabra.schemas import (
     DaySnapshot,
     DimensionVerdict,
+    GateSeverity,
+    GateViolation,
     LifecycleStage,
     QualityPlan,
     SimEvent,
@@ -70,33 +72,52 @@ class SkipRateTracker:
         """Disagreement rate between rule validator and soft judge; 0.0 when no checks."""
         return self.disagreement_cases / max(1, self.disagreement_checks)
 
-    def check_gates(self) -> list[str]:
+    def check_gates(self) -> list[GateViolation]:
         """
         Return a list of gate violations (empty list = all gates healthy).
 
         Thresholds (Section 10.1):
-        - prose_fact_rate > 2% → generator reliability problem, abort run
-        - quality_rule_rate > 2% → planted-quality consistency problem, abort run
-        - disagreement_rate > 25% → extraction/validator divergence blocks extraction
-          (15% triggers a warning only — not included here; caller logs that separately)
+        - prose_fact_rate > 2% → ERROR: generator reliability problem, abort run
+        - quality_rule_rate > 2% → ERROR: planted-quality consistency problem, abort run
+        - disagreement_rate > 25% → ERROR: extraction/validator divergence blocks extraction
+        - disagreement_rate > 15% (and ≤ 25%) → WARNING: approaching block threshold
         """
-        violations: list[str] = []
+        violations: list[GateViolation] = []
         if self.prose_fact_rate > 0.02:
-            violations.append(
-                f"prose_fact_rate={self.prose_fact_rate:.3f} > 0.02"
-            )
+            violations.append(GateViolation(
+                gate_name="prose_fact_rate",
+                severity=GateSeverity.ERROR,
+                actual_value=self.prose_fact_rate,
+                threshold=0.02,
+                message=f"prose_fact_rate={self.prose_fact_rate:.3f} exceeds 0.02",
+            ))
         if self.quality_rule_rate > 0.02:
-            violations.append(
-                f"quality_rule_rate={self.quality_rule_rate:.3f} > 0.02"
-            )
+            violations.append(GateViolation(
+                gate_name="quality_rule_rate",
+                severity=GateSeverity.ERROR,
+                actual_value=self.quality_rule_rate,
+                threshold=0.02,
+                message=f"quality_rule_rate={self.quality_rule_rate:.3f} exceeds 0.02",
+            ))
         if 0.15 < self.disagreement_rate <= 0.25:
-            violations.append(
-                f"WARNING: disagreement_rate={self.disagreement_rate:.3f} > 0.15 (approaching 25% block threshold)"
-            )
+            violations.append(GateViolation(
+                gate_name="disagreement_rate",
+                severity=GateSeverity.WARNING,
+                actual_value=self.disagreement_rate,
+                threshold=0.15,
+                message=(
+                    f"disagreement_rate={self.disagreement_rate:.3f} exceeds 0.15 "
+                    "(approaching 25% block threshold)"
+                ),
+            ))
         if self.disagreement_rate > 0.25:
-            violations.append(
-                f"disagreement_rate={self.disagreement_rate:.3f} > 0.25 (blocks extraction)"
-            )
+            violations.append(GateViolation(
+                gate_name="disagreement_rate",
+                severity=GateSeverity.ERROR,
+                actual_value=self.disagreement_rate,
+                threshold=0.25,
+                message=f"disagreement_rate={self.disagreement_rate:.3f} exceeds 0.25 (blocks extraction)",
+            ))
         return violations
 
 

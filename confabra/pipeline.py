@@ -41,6 +41,8 @@ from confabra.schemas import (
     ConversationRecord,
     ConversationSignals,
     DaySnapshot,
+    GateSeverity,
+    GateViolation,
     Manifest,
     QualityPlan,
     SimEvent,
@@ -1093,10 +1095,15 @@ def _run_pipeline_inner(
     if ledger_status == "blocking":
         _log(config, "  WARNING: disagreement rate exceeds 25% — corpus extraction may be unreliable")
 
-    # Log any gate violations (includes 15% warning and 25% block thresholds).
-    gate_violations = skip_tracker.check_gates()
-    for violation in gate_violations:
-        _log(config, f"  GATE: {violation}")
+    # Collect gate violations (structured). Abort on errors *after* manifest is written.
+    gate_violations: list[GateViolation] = skip_tracker.check_gates()
+    gate_errors = [v for v in gate_violations if v.severity == GateSeverity.ERROR]
+    gate_warnings = [v for v in gate_violations if v.severity == GateSeverity.WARNING]
+    for w in gate_warnings:
+        print(f"[confabra]   GATE WARNING: {w.message}")
+        _log(config, f"  GATE WARNING: {w.message}")
+    for e in gate_errors:
+        print(f"[confabra]   GATE ERROR: {e.message}")
 
     # Cache telemetry summary — placeholder for future re-enable of prompt caching.
     # Caching was evaluated but removed because the system prompt (~83 tokens) is
@@ -1175,7 +1182,9 @@ def _run_pipeline_inner(
     disagreement_lines = [r.model_dump_json() for r in ledger.records]
     atomic_write_jsonl(profile_dir / "disagreements.jsonl", disagreement_lines)
 
-    # Build manifest.
+    # Build manifest.  gate_aborted=True and gate_violations are set when a hard
+    # gate fires; the manifest is always written before raising so the run is
+    # inspectable even on abort.
     manifest = Manifest(
         generator_version="0.2.0",
         profile_name=profile.name,
@@ -1208,6 +1217,8 @@ def _run_pipeline_inner(
         cache_read_tokens=skip_tracker.cache_read_tokens,
         cache_hit_rate=_hit_rate,
         cache_estimated_savings_usd=_estimated_savings_usd,
+        gate_aborted=bool(gate_errors),
+        gate_violations=[v.model_dump() for v in gate_violations],
     )
 
     manifest_path = profile_dir / "manifest.json"
@@ -1219,5 +1230,12 @@ def _run_pipeline_inner(
         f"Done. {len(all_conversations)} conversations, "
         f"{len(quality_plans)} planted, {len(skipped_records)} skipped.",
     )
+
+    # Abort after manifest write so the run is inspectable.
+    if gate_errors:
+        error_messages = "\n".join(f"  • {e.message}" for e in gate_errors)
+        raise RuntimeError(
+            f"Quality gate(s) exceeded — aborting corpus run:\n{error_messages}"
+        )
 
     return manifest

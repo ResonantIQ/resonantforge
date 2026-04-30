@@ -374,6 +374,28 @@ class ValidationVerdict(str, Enum):
     SKIP = "skip"
 
 
+class GateSeverity(str, Enum):
+    """Severity of a quality gate violation."""
+
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class GateViolation(BaseModel):
+    """
+    Structured record of a single quality gate violation from SkipRateTracker.check_gates().
+
+    WARNING violations are logged but do not abort the run.
+    ERROR violations cause the pipeline to raise RuntimeError after writing the manifest.
+    """
+
+    gate_name: str
+    severity: GateSeverity
+    actual_value: float
+    threshold: float
+    message: str
+
+
 class DimensionVerdict(BaseModel):
     """
     Verdict for a single scoring dimension within a validation run.
@@ -679,6 +701,9 @@ class Manifest(BaseModel):
     cache_read_tokens: int = 0
     cache_hit_rate: float = 0.0
     cache_estimated_savings_usd: float = 0.0
+    # Gate abort fields — populated when a hard gate fires and the run is aborted
+    gate_aborted: bool = False
+    gate_violations: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

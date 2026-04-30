@@ -30,6 +30,8 @@ from confabra.schemas import (
     ConversationRecord,
     DimensionVerdict,
     DisagreementRecord,
+    GateSeverity,
+    GateViolation,
     KBChunk,
     Manifest,
     QualityPlan,
@@ -39,6 +41,7 @@ from confabra.schemas import (
     ValidationResult,
     ValidationVerdict,
 )
+from confabra.layer1.plan_validator import SkipRateTracker
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -772,12 +775,21 @@ def test_skip_tracker_prose_fact_increments(tmp_path: Path) -> None:
             # (prose generation is mocked; accuracy extractor swallows auth errors).
             anthropic_api_key="fake-key-for-skip-test",
         )
-        manifest = run_pipeline(config)
+        # The gate now fires (prose_fact_rate is 100% when all planned convos skip),
+        # so run_pipeline raises RuntimeError after writing the manifest and JSONL files.
+        with pytest.raises(RuntimeError, match="Quality gate"):
+            run_pipeline(config)
 
-    # Assertion 25a: prose_fact_violation_rate must be > 0
-    assert manifest.prose_fact_violation_rate > 0.0, (
+    # Assertion 25a: manifest.json must exist (written before the abort) and report
+    # a prose_fact_violation_rate > 0.
+    manifest_path = tmp_path / "saas" / "manifest.json"
+    assert manifest_path.exists(), (
+        "Assertion 25a — manifest.json must be written even when gate aborts the run"
+    )
+    manifest_data = json.loads(manifest_path.read_text())
+    assert manifest_data.get("prose_fact_violation_rate", 0.0) > 0.0, (
         f"Assertion 25a — expected prose_fact_violation_rate > 0 when every planted "
-        f"conversation is SKIPped, got {manifest.prose_fact_violation_rate:.4f}"
+        f"conversation is SKIPped, got {manifest_data.get('prose_fact_violation_rate')}"
     )
 
     # Assertion 25b: skipped_conversations.jsonl must be non-empty
@@ -848,12 +860,18 @@ def test_disagreement_ledger_populated(tmp_path: Path) -> None:
             output_root=tmp_path,
             anthropic_api_key="fake-key-for-ledger-test",
         )
-        manifest = run_pipeline(config)
+        # Gate fires because all planted convos SKIP → prose_fact_rate > 2%.
+        # Manifest is written before the abort so we can still read rates from it.
+        with pytest.raises(RuntimeError, match="Quality gate"):
+            run_pipeline(config)
 
-    # Assertion 26a: manifest.disagreement_rate must be non-zero
-    assert manifest.disagreement_rate > 0.0, (
+    # Assertion 26a: manifest.json must report a non-zero disagreement_rate
+    manifest_path = tmp_path / "saas" / "manifest.json"
+    assert manifest_path.exists(), "manifest.json must exist after gate abort"
+    manifest_data = json.loads(manifest_path.read_text())
+    assert manifest_data.get("disagreement_rate", 0.0) > 0.0, (
         f"Assertion 26a — expected disagreement_rate > 0 when mock FAIL verdict fires "
-        f"soft judge with disagreement=True, got {manifest.disagreement_rate:.4f}"
+        f"soft judge with disagreement=True, got {manifest_data.get('disagreement_rate')}"
     )
 
     # Assertion 26b: disagreements.jsonl must contain records
@@ -914,7 +932,9 @@ def test_skipped_record_fields_complete(tmp_path: Path) -> None:
             output_root=tmp_path,
             anthropic_api_key="fake-key-for-fields-test",
         )
-        run_pipeline(config)
+        # Gate fires when all planted convos SKIP; manifest and JSONL are written first.
+        with pytest.raises(RuntimeError, match="Quality gate"):
+            run_pipeline(config)
 
     skipped_path = tmp_path / "saas" / "skipped_conversations.jsonl"
     skipped = _read_jsonl(skipped_path)
@@ -981,4 +1001,142 @@ def test_variant_id_non_null_for_validated_convs(corpus: tuple[Path, Manifest]) 
     assert not violations, (
         f"Assertion 27 — {len(violations)} quality plan(s) with empty effective variant_id. "
         f"First: {violations[0]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Gate violation structure tests (assertions 29–31)
+# ---------------------------------------------------------------------------
+
+
+def test_gate_returns_structured_violations() -> None:
+    """
+    Assertion 29: check_gates() returns GateViolation objects with severity=ERROR
+    when a hard gate threshold is exceeded.
+
+    Sets prose_fact_rate to 50% (well above the 2% threshold) and confirms
+    the returned violation has the right gate_name, severity, threshold,
+    and actual_value fields.
+    """
+    tracker = SkipRateTracker(prose_fact_failures=5, prose_fact_attempts=10)
+    violations = tracker.check_gates()
+
+    assert len(violations) > 0, (
+        "Assertion 29a — check_gates() returned no violations with prose_fact_rate=0.50, "
+        "expected at least one ERROR violation"
+    )
+    prose_violations = [v for v in violations if v.gate_name == "prose_fact_rate"]
+    assert len(prose_violations) == 1, (
+        f"Assertion 29b — expected exactly one prose_fact_rate violation, "
+        f"got {[v.gate_name for v in violations]}"
+    )
+    v = prose_violations[0]
+    # Assertion 29c
+    assert isinstance(v, GateViolation), (
+        f"Assertion 29c — check_gates() must return GateViolation objects, got {type(v)}"
+    )
+    assert v.severity == GateSeverity.ERROR, (
+        f"Assertion 29d — prose_fact_rate violation must be severity=ERROR, got {v.severity}"
+    )
+    assert v.threshold == pytest.approx(0.02), (
+        f"Assertion 29e — prose_fact_rate threshold must be 0.02, got {v.threshold}"
+    )
+    assert v.actual_value == pytest.approx(0.50), (
+        f"Assertion 29f — actual_value must be 0.50 (5/10), got {v.actual_value}"
+    )
+
+
+def test_gate_warning_does_not_abort() -> None:
+    """
+    Assertion 30: disagreement_rate between 15% and 25% produces only a WARNING,
+    not an ERROR — so the pipeline is not forced to abort.
+
+    Sets disagreement_rate=0.20 (above 15% warn, below 25% block) and confirms
+    the violation is severity=WARNING with no ERROR-level violations present.
+    """
+    # 4 disagreements out of 20 checks = 20% — above warn threshold, below block.
+    tracker = SkipRateTracker(disagreement_cases=4, disagreement_checks=20)
+    violations = tracker.check_gates()
+
+    errors = [v for v in violations if v.severity == GateSeverity.ERROR]
+    warnings = [v for v in violations if v.severity == GateSeverity.WARNING]
+
+    # Assertion 30a: no ERROR violations
+    assert len(errors) == 0, (
+        f"Assertion 30a — disagreement_rate=0.20 must not produce ERROR violations, "
+        f"got {[v.gate_name for v in errors]}"
+    )
+    # Assertion 30b: exactly one WARNING violation
+    assert len(warnings) == 1, (
+        f"Assertion 30b — disagreement_rate=0.20 must produce exactly one WARNING, "
+        f"got {[(v.gate_name, v.severity) for v in warnings]}"
+    )
+    assert warnings[0].gate_name == "disagreement_rate", (
+        f"Assertion 30c — warning must be for disagreement_rate, got {warnings[0].gate_name!r}"
+    )
+
+
+def test_pipeline_aborts_on_hard_gate(tmp_path: Path) -> None:
+    """
+    Assertion 31: when prose_fact_rate exceeds the 2% gate, the pipeline raises
+    RuntimeError AND still writes manifest.json with gate_aborted=true.
+
+    Uses the same mock setup as test_skip_tracker_prose_fact_increments to force
+    all planted conversations to SKIP, pushing prose_fact_rate well above 2%.
+    """
+    from unittest.mock import patch
+
+    _FAKE_PROSE = (
+        "Customer: I need help with my account.\n"
+        "Agent: I'd be happy to help you today. What seems to be the issue?\n"
+        "Customer: I can't access the dashboard.\n"
+        "Agent: I understand. Let me look into that for you right away."
+    )
+
+    _skip_result = ValidationResult(
+        conversation_id="mocked",
+        overall_verdict=ValidationVerdict.SKIP,
+        dimension_verdicts=[],
+        skip_reason="mocked SKIP verdict for test_pipeline_aborts_on_hard_gate",
+        retry_count=2,
+    )
+
+    with (
+        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("confabra.pipeline.validate_all_dimensions", return_value=[]),
+        patch(
+            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            return_value=_skip_result,
+        ),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=2,
+            months=1,
+            seed=42,
+            output_root=tmp_path,
+            anthropic_api_key="fake-key-for-gate-abort-test",
+        )
+        # Assertion 31a: pipeline raises RuntimeError when hard gate fires
+        with pytest.raises(RuntimeError, match="Quality gate"):
+            run_pipeline(config)
+
+    # Assertion 31b: manifest.json must exist even after the abort
+    manifest_path = tmp_path / "saas" / "manifest.json"
+    assert manifest_path.exists(), (
+        "Assertion 31b — manifest.json must be written even when a gate aborts the run"
+    )
+
+    manifest_data = json.loads(manifest_path.read_text())
+
+    # Assertion 31c: manifest must have gate_aborted=True
+    assert manifest_data.get("gate_aborted") is True, (
+        f"Assertion 31c — manifest.gate_aborted must be True after gate abort, "
+        f"got {manifest_data.get('gate_aborted')!r}"
+    )
+
+    # Assertion 31d: manifest must have non-empty gate_violations list
+    gate_violations = manifest_data.get("gate_violations", [])
+    assert len(gate_violations) > 0, (
+        "Assertion 31d — manifest.gate_violations must be non-empty after gate abort"
     )
