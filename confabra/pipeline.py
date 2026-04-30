@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
+import shutil
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -77,9 +79,10 @@ class PipelineConfig:
     accounts: int  # number of accounts to simulate
     months: int  # number of months to simulate
     seed: int  # deterministic PRNG seed
-    output_dir: Path  # root output directory
+    output_root: Path  # root output directory; pipeline appends <profile>/ internally
     anthropic_api_key: str | None = None  # None → dry-run (no LLM calls)
     verbose: bool = False
+    force: bool = False  # when True, overwrite existing target directory contents
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +355,73 @@ def _find_account_snapshot(
 
 
 # ---------------------------------------------------------------------------
+# Concurrent-run protection
+# ---------------------------------------------------------------------------
+
+_LOCK_FILENAME = ".confabra-lock"
+
+
+def _lockfile_path(target: Path) -> Path:
+    """Return the lock file path for a target directory."""
+    return target.parent / _LOCK_FILENAME
+
+
+def _pid_is_live(pid: int) -> bool:
+    """Return True if a process with the given PID is currently running."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
+def _acquire_lock(target: Path, config: PipelineConfig) -> Path:
+    """
+    Write a .confabra-lock file in the parent of *target*.
+
+    Refuses to start if a live lockfile exists (same-PID guard).  Overwrites
+    stale locks (dead PID).  Returns the lockfile path so the caller can remove
+    it on exit.
+    """
+    lock_path = _lockfile_path(target)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if lock_path.exists():
+        try:
+            lock_data = json.loads(lock_path.read_text(encoding="utf-8"))
+            owner_pid = lock_data.get("pid", -1)
+            if _pid_is_live(owner_pid):
+                raise RuntimeError(
+                    f"Another confabra process (PID {owner_pid}) is already generating "
+                    f"into {target}. Lock file: {lock_path}"
+                )
+            _log(config, f"  WARNING: stale lock file found (PID {owner_pid} is dead). Overwriting.")
+        except (json.JSONDecodeError, OSError):
+            _log(config, "  WARNING: unreadable lock file found. Overwriting.")
+
+    lock_data = {"pid": os.getpid(), "started_at": datetime.now(tz=timezone.utc).isoformat()}
+    lock_path.write_text(json.dumps(lock_data), encoding="utf-8")
+    return lock_path
+
+
+def _check_target_dir(target: Path, config: PipelineConfig) -> None:
+    """
+    Refuse to overwrite a non-empty target directory unless --force is set.
+
+    When --force is True, deletes all existing contents before the run so that
+    the pipeline starts from a clean slate.
+    """
+    if target.exists() and any(target.iterdir()):
+        if not config.force:
+            raise RuntimeError(
+                f"Target directory {target} already contains files. "
+                "Refusing to overwrite. Pass --force to override or choose a different --out-root path."
+            )
+        _log(config, f"  --force: removing existing contents of {target}")
+        shutil.rmtree(target)
+
+
+# ---------------------------------------------------------------------------
 # Phase 3 — prose generation loop
 # ---------------------------------------------------------------------------
 
@@ -501,12 +571,34 @@ def run_pipeline(config: PipelineConfig) -> Manifest:
     """
     generated_at = datetime.now(tz=timezone.utc)
 
+    # Resolve profile early so we know the target directory.
+    profile = get_profile(config.profile_name)
+    target = config.output_root / profile.name
+
+    # Concurrent-run protection: fail-fast on non-empty target, acquire lockfile.
+    _check_target_dir(target, config)
+    lock_path = _acquire_lock(target, config)
+
+    try:
+        return _run_pipeline_inner(config, profile, target, generated_at)
+    finally:
+        try:
+            lock_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _run_pipeline_inner(
+    config: PipelineConfig,
+    profile,  # type: ignore[type-arg]
+    profile_dir: Path,
+    generated_at: datetime,
+) -> Manifest:
+    """Inner pipeline implementation — called after locks are acquired."""
     # ==================================================================
     # Phase 1 — Deterministic state planning
     # ==================================================================
     _log(config, "Phase 1: state planning")
-
-    profile = get_profile(config.profile_name)
 
     # 1b. Run state machine — returns (events, snapshots).
     sm = StateMachine(
@@ -536,7 +628,6 @@ def run_pipeline(config: PipelineConfig) -> Manifest:
     # ==================================================================
     _log(config, "Phase 2: corpus-config artifacts")
 
-    profile_dir = config.output_dir / profile.name
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     # KB generation — output_dir arg is the profile dir (generator creates

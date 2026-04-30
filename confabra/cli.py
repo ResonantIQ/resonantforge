@@ -14,6 +14,7 @@ import json
 import os
 import sys
 from pathlib import Path
+
 from typing import Optional
 
 import click
@@ -81,32 +82,59 @@ def cli() -> None:
 @click.option("--accounts", default=None, type=int, help="Number of accounts to simulate (default: profile-dependent)")
 @click.option("--months", default=None, type=int, help="Number of months to simulate (default: profile-dependent)")
 @click.option("--seed", default=42, show_default=True, type=int, help="Deterministic PRNG seed")
-@click.option("--out", default=None, type=click.Path(), help="Output directory (default: ./corpus/<profile>)")
-@click.option("--api-key", default=None, envvar="ANTHROPIC_API_KEY", help="Anthropic API key (reads ANTHROPIC_API_KEY env if not set; None = dry-run)")
+@click.option("--out-root", "out_root", default=None, type=click.Path(), help="Output root directory; corpus written to <out-root>/<profile>/ (default: ./corpus)")
+@click.option("--out", "out_legacy", default=None, type=click.Path(), hidden=True, help="[DEPRECATED] Use --out-root instead.")
+@click.option("--api-key", default=None, envvar="ANTHROPIC_API_KEY", help="[DEPRECATED] Set ANTHROPIC_API_KEY environment variable instead. Anthropic API key.")
 @click.option("--verbose", is_flag=True, default=False, help="Enable verbose output")
 @click.option("--dry-run", "dry_run", is_flag=True, default=False, help="Skip LLM calls; generate deterministic placeholder prose")
+@click.option("--force", is_flag=True, default=False, help="Overwrite existing output directory contents instead of failing fast.")
 def generate(
     profile: str,
     accounts: Optional[int],
     months: Optional[int],
     seed: int,
-    out: Optional[str],
+    out_root: Optional[str],
+    out_legacy: Optional[str],
     api_key: Optional[str],
     verbose: bool,
     dry_run: bool,
+    force: bool,
 ) -> None:
     """Run the corpus generation pipeline."""
+    import sys as _sys
     from confabra.pipeline import PipelineConfig, run_pipeline
 
     resolved_accounts, resolved_months = _resolve_profile_defaults(profile, accounts, months)
 
-    # Resolve output directory.
-    # pipeline.py appends profile.name internally, so pass the parent dir.
-    # Default: ./corpus  →  pipeline writes to ./corpus/<profile>/
-    if out is not None:
-        output_dir = Path(out)
+    # --out is deprecated; warn and map to --out-root.
+    if out_legacy is not None:
+        print(
+            "WARNING: --out flag is deprecated and will be removed in a future release. "
+            "Use --out-root instead.",
+            file=_sys.stderr,
+        )
+        if out_root is None:
+            out_root = out_legacy
+
+    # --api-key deprecation warning (when the flag is explicitly passed, it will be non-None
+    # only because the user typed it — envvar reads are transparent and do not need a warning).
+    # Click sets envvar values before the callback; we detect explicit flag use by checking
+    # whether the api_key context source was the CLI (not the env).
+    # Simplest heuristic: warn whenever api_key is set AND ANTHROPIC_API_KEY env is not set,
+    # meaning the value came from the flag directly.
+    if api_key is not None and not os.environ.get("ANTHROPIC_API_KEY"):
+        print(
+            "WARNING: --api-key flag is deprecated and will be removed in a future release. "
+            "Set ANTHROPIC_API_KEY environment variable instead.",
+            file=_sys.stderr,
+        )
+
+    # Resolve output root directory.
+    # pipeline.py appends profile.name internally → ./corpus/<profile>/
+    if out_root is not None:
+        output_root = Path(out_root)
     else:
-        output_dir = Path("corpus")
+        output_root = Path("corpus")
 
     # --dry-run overrides any API key: treat as None (no LLM calls).
     effective_api_key: Optional[str] = None if dry_run else api_key
@@ -116,9 +144,10 @@ def generate(
         accounts=resolved_accounts,
         months=resolved_months,
         seed=seed,
-        output_dir=output_dir,
+        output_root=output_root,
         anthropic_api_key=effective_api_key,
         verbose=verbose,
+        force=force,
     )
 
     mode_label = "dry-run" if effective_api_key is None else "live"
@@ -151,7 +180,7 @@ def generate(
     table.add_row("Agents", str(manifest.agent_count))
     table.add_row("KB docs", str(manifest.knowledge_base_doc_count))
     table.add_row("KB chunks", str(manifest.knowledge_base_chunk_count))
-    table.add_row("Output dir", str(output_dir / manifest.profile_name))  # profile subdir
+    table.add_row("Output dir", str(output_root / manifest.profile_name))  # profile subdir
 
     console.print(table)
     console.print("[bold green]Done.[/bold green]")

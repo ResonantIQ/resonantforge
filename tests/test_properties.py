@@ -64,7 +64,7 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Manifest]:
         accounts=_SMALL_CORPUS_ACCOUNTS,
         months=_SMALL_CORPUS_MONTHS,
         seed=SEED,
-        output_dir=out,
+        output_root=out,
         anthropic_api_key=None,  # dry-run — no Anthropic calls
     )
     manifest = run_pipeline(config)
@@ -96,13 +96,13 @@ def test_determinism(tmp_path: Path) -> None:
     cause spurious failures.  events_hash and snapshots_hash are SHA-256 over
     the JSONL content and must be equal across runs.
     """
-    def _run(output_dir: Path) -> Manifest:
+    def _run(output_root: Path) -> Manifest:
         config = PipelineConfig(
             profile_name="saas",
             accounts=_SMALL_CORPUS_ACCOUNTS,
             months=_SMALL_CORPUS_MONTHS,
             seed=SEED,
-            output_dir=output_dir,
+            output_root=output_root,
             anthropic_api_key=None,
         )
         return run_pipeline(config)
@@ -607,4 +607,54 @@ def test_cross_contamination_density(corpus: tuple[Path, Manifest]) -> None:
         f"Assertion 22 — SaaS profile has {len(bv_variants)} brand voice variants "
         f"but 0 KB chunks have tone_variant set. "
         f"Cross-contamination injector may not have run or may have cleared all markers."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Group 12 — Concurrent-run protection (assertions 23a, 23b, 23c)
+# ---------------------------------------------------------------------------
+
+
+def test_concurrent_run_protection(tmp_path: Path) -> None:
+    """
+    Concurrent-run guard must fail-fast on a non-empty directory, succeed with
+    --force, and remove the lockfile on successful completion.
+
+    23a. Running into an existing non-empty directory raises RuntimeError
+         without --force.
+    23b. Running with --force=True succeeds even when the target is non-empty.
+    23c. The lockfile is removed on successful completion.
+    """
+    from confabra.pipeline import PipelineConfig, run_pipeline
+
+    def _make_config(out_root: Path, force: bool = False) -> PipelineConfig:
+        return PipelineConfig(
+            profile_name="saas",
+            accounts=_SMALL_CORPUS_ACCOUNTS,
+            months=_SMALL_CORPUS_MONTHS,
+            seed=SEED,
+            output_root=out_root,
+            anthropic_api_key=None,
+            force=force,
+        )
+
+    # -- First run: succeeds and produces the target directory.
+    out1 = tmp_path / "guard_test"
+    run_pipeline(_make_config(out1))
+    target = out1 / "saas"
+    assert target.exists() and any(target.iterdir()), "First run must produce a non-empty target"
+
+    # -- Assertion 23a: second run into same non-empty dir raises without --force.
+    import pytest as _pytest
+    with _pytest.raises(RuntimeError, match="already contains files"):
+        run_pipeline(_make_config(out1, force=False))
+
+    # -- Assertion 23b: second run with --force=True succeeds.
+    run_pipeline(_make_config(out1, force=True))
+
+    # -- Assertion 23c: lockfile is removed after a successful run.
+    from confabra.pipeline import _lockfile_path
+    lock = _lockfile_path(out1 / "saas")
+    assert not lock.exists(), (
+        f"Lockfile {lock} was not cleaned up after a successful run"
     )
