@@ -39,6 +39,7 @@ from confabra.profiles import get_profile
 from confabra.utils.atomic_write import atomic_write_jsonl, atomic_write_text
 from confabra.schemas import (
     ConversationRecord,
+    ConversationSignals,
     DaySnapshot,
     Manifest,
     QualityPlan,
@@ -47,6 +48,12 @@ from confabra.schemas import (
     ValidationVerdict,
 )
 from confabra.tenant_config.generator import generate_tenant_config
+from confabra.validators.disagreement_ledger import DisagreementLedger, run_soft_judge
+from confabra.validators.extractors.accuracy import extract_accuracy_signals
+from confabra.validators.extractors.brand_voice import extract_brand_voice_signals
+from confabra.validators.extractors.empathy import extract_empathy_signals
+from confabra.validators.extractors.resolution import extract_resolution_signals
+from confabra.validators.rule_engine import validate_all_dimensions
 
 # ---------------------------------------------------------------------------
 # Optional Anthropic import guard
@@ -201,7 +208,7 @@ def _build_prompt(
 
 
 def _call_anthropic(
-    api_key: str,
+    client: "anthropic.Anthropic",
     system_prompt: str,
     user_prompt: str,
 ) -> tuple[str, int, int]:
@@ -215,12 +222,12 @@ def _call_anthropic(
     Prompt caching was evaluated and removed: the system prompt at ~83 tokens is
     25× below Haiku's 2048-token minimum cache threshold, so cache_control blocks
     were silently ignored by the API.  See docs/resonantforge/cache-diagnosis.md.
-    The return shape still includes (text, 0, 0) to keep the cache telemetry shell
-    in _run_pipeline_inner intact — re-enabling caching only requires updating this
-    function and crossing the token threshold.
+    The return shape still includes (text, 0, 0) so the cache telemetry shell in
+    _run_pipeline_inner compiles without change — re-enabling caching only requires
+    updating this function and crossing the token threshold.
 
     Args:
-        api_key:       Anthropic API key.
+        client:        Pre-initialized Anthropic client (created once per run).
         system_prompt: System prompt defining the generation role.
         user_prompt:   User prompt carrying account/chunk context.
 
@@ -232,7 +239,6 @@ def _call_anthropic(
         raise RuntimeError(
             "anthropic package is not installed. Install it with: pip install anthropic"
         )
-    client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,
@@ -434,6 +440,128 @@ def _check_target_dir(target: Path, config: PipelineConfig) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Post-generation validation helpers
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LexiconsBundle:
+    """
+    All lexicon lists needed by the four post-generation signal extractors.
+
+    Loaded once per call to _generate_prose_for_chunk via _load_lexicons() so
+    that the extractors receive pure lists with no profile coupling.
+    """
+
+    acknowledgment_phrases: list[str]
+    emotion_lexicon: list[str]
+    apology_lexicon: list[str]
+    action_verb_lexicon: list[str]
+    hedging_lexicon: list[str]
+    directive_lexicon: list[str]
+    warm_terms: list[str]
+    clinical_terms: list[str]
+    contraction_patterns: list[str]
+    resolution_patterns: list[str]
+    deflection_patterns: list[str]
+    next_steps_patterns: list[str]
+    temporal_anchor_patterns: list[str]
+    specific_actor_patterns: list[str]
+    ownership_patterns: list[str]
+    issue_keywords: list[str]
+    synonym_map: dict[str, str]
+
+
+def _split_prose_turns(prose: str) -> tuple[str, str]:
+    """
+    Split a full conversation into agent-only and customer-only strings.
+
+    Splits on "Agent:" and "Customer:" line prefixes.  Returns concatenated
+    agent turns and concatenated customer turns respectively.  Lines that don't
+    start with a recognised speaker prefix are attributed to neither speaker.
+
+    Args:
+        prose: Full conversation text with "Agent: ..." and "Customer: ..." lines.
+
+    Returns:
+        (agent_prose, customer_prose) — each is a single string with speaker
+        prefix lines joined by newlines.
+    """
+    agent_lines: list[str] = []
+    customer_lines: list[str] = []
+    for line in prose.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("Agent:"):
+            agent_lines.append(stripped[len("Agent:"):].strip())
+        elif stripped.startswith("Customer:"):
+            customer_lines.append(stripped[len("Customer:"):].strip())
+    return "\n".join(agent_lines), "\n".join(customer_lines)
+
+
+def _load_lexicons(profile) -> LexiconsBundle:  # type: ignore[type-arg]
+    """
+    Load all extractor lexicons from a profile's accessor methods.
+
+    Calling this once per conversation avoids repeated attribute lookups on the
+    profile object and provides a single typed bundle to pass to all extractors.
+
+    Args:
+        profile: A concrete Profile instance (SaaSProfile, PSProfile, etc.).
+
+    Returns:
+        LexiconsBundle with all lists populated.
+    """
+    return LexiconsBundle(
+        acknowledgment_phrases=profile.acknowledgment_phrases(),
+        emotion_lexicon=profile.emotion_lexicon(),
+        apology_lexicon=profile.apology_lexicon(),
+        action_verb_lexicon=profile.action_verb_lexicon(),
+        hedging_lexicon=profile.hedging_lexicon(),
+        directive_lexicon=profile.directive_lexicon(),
+        warm_terms=profile.warm_terms(),
+        clinical_terms=profile.clinical_terms(),
+        contraction_patterns=profile.contraction_patterns(),
+        resolution_patterns=profile.resolution_patterns(),
+        deflection_patterns=profile.deflection_patterns(),
+        next_steps_patterns=profile.next_steps_patterns(),
+        temporal_anchor_patterns=profile.temporal_anchor_patterns(),
+        specific_actor_patterns=profile.specific_actor_patterns(),
+        ownership_patterns=profile.ownership_patterns(),
+        issue_keywords=profile.issue_keywords(),
+        synonym_map=profile.synonym_map(),
+    )
+
+
+def _build_conversation_signals(
+    conv_id: str,
+    empathy: "confabra.schemas.EmpathySignals",
+    resolution: "confabra.schemas.ResolutionSignals",
+    brand_voice: "confabra.schemas.BrandVoiceSignals",
+    accuracy: "confabra.schemas.AccuracySignals",
+) -> ConversationSignals:
+    """
+    Assemble the four dimension signal objects into a ConversationSignals record.
+
+    Args:
+        conv_id:    Conversation ID for provenance.
+        empathy:    Output of extract_empathy_signals.
+        resolution: Output of extract_resolution_signals.
+        brand_voice: Output of extract_brand_voice_signals.
+        accuracy:   Output of extract_accuracy_signals.
+
+    Returns:
+        ConversationSignals ready for post_generation_validate.
+    """
+    return ConversationSignals(
+        conversation_id=conv_id,
+        empathy=empathy,
+        resolution=resolution,
+        brand_voice=brand_voice,
+        accuracy=accuracy,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Phase 3 — prose generation loop
 # ---------------------------------------------------------------------------
 
@@ -450,31 +578,41 @@ def _generate_prose_for_chunk(
     validator: PlanValidator,
     skip_tracker: SkipRateTracker,
     config: PipelineConfig,
-    profile_name: str,
+    profile,  # type: ignore[type-arg]  # Profile instance
+    anthropic_client: "anthropic.Anthropic | None",
+    kb_chunks: list,
+    ledger: DisagreementLedger,
 ) -> ConversationRecord | None:
     """
     Generate prose for one (account_id, month_index, conv_event) chunk.
 
-    Runs the full pre-prompt → generate → post-prompt validation cycle with up to
-    2 retries on post-generation failure.  Returns None when the chunk is skipped
-    (pre-prompt failure or exhausted retries).
+    Runs the full pre-prompt → generate → post-generation validation cycle with up
+    to 2 retries on post-generation failure.  Returns None when the chunk is skipped
+    (pre-prompt failure or exhausted retries after validation).
 
     Pre-prompt validation always runs even in dry-run mode so that planted-quality
     consistency is enforced regardless of whether an LLM is available.
 
+    Post-generation validation (signal extraction + rule engine) runs only for
+    planted conversations (quality_plan is not None).  Organic conversations are
+    accepted on first generation attempt.
+
     Args:
-        conv_id:          Stable ID for this conversation chunk.
-        account_id:       Account the conversation belongs to.
-        month_index:      0-based simulation month.
-        conv_event:       The CONVERSATION_STARTED event driving this chunk.
-        quality_plan:     Quality plan for this chunk, or None if organic.
-        account_snapshot: The DaySnapshot for this account/day, or None.
-        account_events:   All events for this account.
-        emitter:          SnapshotEmitter for month-summary queries.
-        validator:        PlanValidator for pre-prompt and post-generation gates.
-        skip_tracker:     SkipRateTracker accumulating run-wide skip rates.
-        config:           Pipeline configuration (API key, verbose, etc.).
-        profile_name:     Profile label for prompt context.
+        conv_id:           Stable ID for this conversation chunk.
+        account_id:        Account the conversation belongs to.
+        month_index:       0-based simulation month.
+        conv_event:        The CONVERSATION_STARTED event driving this chunk.
+        quality_plan:      Quality plan for this chunk, or None if organic.
+        account_snapshot:  The DaySnapshot for this account/day, or None.
+        account_events:    All events for this account.
+        emitter:           SnapshotEmitter for month-summary queries.
+        validator:         PlanValidator for pre-prompt and post-generation gates.
+        skip_tracker:      SkipRateTracker accumulating run-wide skip rates.
+        config:            Pipeline configuration (verbose flag, etc.).
+        profile:           Concrete Profile instance for lexicon access.
+        anthropic_client:  Pre-initialized Anthropic client, or None for dry-run.
+        kb_chunks:         All KB chunks from Phase 2 (used by accuracy extractor).
+        ledger:            DisagreementLedger accumulating soft-judge records.
 
     Returns:
         A ConversationRecord on success, or None if the chunk was skipped.
@@ -498,7 +636,7 @@ def _generate_prose_for_chunk(
             return None
 
     # ------------------------------------------------------------------
-    # Stage 2 — prose generation (with retry loop)
+    # Stage 2 — prose generation with post-generation validation loop
     # ------------------------------------------------------------------
     month_summary = emitter.month_summary(account_id, month_index)
     system_prompt, user_prompt = _build_prompt(
@@ -507,14 +645,14 @@ def _generate_prose_for_chunk(
         conv_event=conv_event,
         month_summary=month_summary,
         quality_plan=quality_plan,
-        profile_name=profile_name,
+        profile_name=profile.name,
     )
 
     max_retries = 2
     prose: str | None = None
 
     for attempt in range(max_retries + 1):
-        if config.anthropic_api_key is None:
+        if anthropic_client is None:
             # Dry-run: generate deterministic placeholder prose.
             prose = (
                 f"[DRY RUN] conv_id={conv_id} account={account_id} "
@@ -527,17 +665,13 @@ def _generate_prose_for_chunk(
         else:
             try:
                 prose, cache_creation, cache_read = _call_anthropic(
-                    api_key=config.anthropic_api_key,
+                    client=anthropic_client,
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
                 )
                 skip_tracker.cache_api_calls += 1
                 skip_tracker.cache_creation_tokens += cache_creation
                 skip_tracker.cache_read_tokens += cache_read
-                _log(
-                    config,
-                    f"  cache {conv_id}: creation={cache_creation} read={cache_read}",
-                )
             except Exception as exc:  # noqa: BLE001
                 _log(config, f"  API error on attempt {attempt}: {exc}")
                 if attempt >= max_retries:
@@ -546,13 +680,111 @@ def _generate_prose_for_chunk(
                     return None
                 continue
 
-        # Post-generation validation is simplified here (no signal extractor yet).
-        # We treat dry-run prose as always passing; real prose also passes at this
-        # stage since the full signal extraction pipeline is a separate task.
-        # The retry/skip logic is wired up for correctness but won't trigger
-        # until the signal extractor is integrated.
+        # ------------------------------------------------------------------
+        # Stage 3 — post-generation validation (planted conversations only)
+        # ------------------------------------------------------------------
         skip_tracker.prose_fact_attempts += 1
-        break  # Success — exit retry loop.
+
+        if quality_plan is not None and anthropic_client is not None:
+            # Post-generation validation only runs for live LLM-generated prose.
+            # Dry-run placeholder prose is always accepted — it doesn't represent
+            # real conversations so validating it would always fail and pollute
+            # prose_fact_violation_rate metrics (per Section 7 test expectation).
+            assert prose is not None
+            agent_prose, customer_prose = _split_prose_turns(prose)
+            lexicons = _load_lexicons(profile)
+
+            empathy_signals = extract_empathy_signals(
+                agent_prose,
+                lexicons.acknowledgment_phrases,
+                lexicons.emotion_lexicon,
+                lexicons.apology_lexicon,
+                lexicons.action_verb_lexicon,
+            )
+            resolution_signals = extract_resolution_signals(
+                agent_prose,
+                customer_prose,
+                lexicons.resolution_patterns,
+                lexicons.deflection_patterns,
+                lexicons.next_steps_patterns,
+                lexicons.temporal_anchor_patterns,
+                lexicons.specific_actor_patterns,
+                lexicons.ownership_patterns,
+                lexicons.issue_keywords,
+            )
+            brand_voice_signals = extract_brand_voice_signals(
+                agent_prose,
+                lexicons.hedging_lexicon,
+                lexicons.directive_lexicon,
+                lexicons.warm_terms,
+                lexicons.clinical_terms,
+                lexicons.contraction_patterns,
+            )
+            accuracy_signals = extract_accuracy_signals(
+                agent_prose,
+                customer_prose,
+                kb_chunks,
+                quality_plan.kb_chunks_required,
+                lexicons.synonym_map,
+                anthropic_client=anthropic_client,
+            )
+
+            signals = _build_conversation_signals(
+                conv_id, empathy_signals, resolution_signals, brand_voice_signals, accuracy_signals
+            )
+
+            # OQ2: use brand_voice_against from quality plan, default to bv_baseline.
+            variant_id = quality_plan.rubric_targets.brand_voice_against or "bv_baseline"
+            feature_profiles = profile.brand_voice_feature_profiles()
+
+            validator_verdicts = validate_all_dimensions(
+                empathy_signals,
+                resolution_signals,
+                brand_voice_signals,
+                accuracy_signals,
+                quality_plan.rubric_targets,
+                variant_id,
+                feature_profiles,
+            )
+
+            # Soft-judge on FAIL verdicts — non-gating, diagnostic only.
+            for verdict in validator_verdicts:
+                if verdict.verdict == ValidationVerdict.FAIL:
+                    record = run_soft_judge(
+                        conv_id,
+                        agent_prose,
+                        verdict.dimension,
+                        verdict.target,
+                        anthropic_client,
+                    )
+                    ledger.add_record(record)
+
+            post_result = validator.post_generation_validate(
+                quality_plan,
+                prose,
+                signals,
+                validator_verdicts,
+                retry_count=attempt,
+            )
+
+            if post_result.overall_verdict == ValidationVerdict.PASS:
+                break
+            elif post_result.overall_verdict == ValidationVerdict.SKIP:
+                skip_tracker.prose_fact_failures += 1
+                skip_tracker.total_skipped += 1
+                _log(config, f"  POST-GEN SKIP {conv_id}: {post_result.skip_reason}")
+                return None
+            else:  # FAIL — retry on next attempt
+                _log(config, f"  POST-GEN FAIL (attempt {attempt + 1}) {conv_id}")
+                continue
+        else:
+            # Organic conversation, or dry-run mode — no post-generation validation.
+            break
+    else:
+        # Retry loop exhausted without break (should not occur — SKIP path returns above).
+        skip_tracker.prose_fact_failures += 1
+        skip_tracker.total_skipped += 1
+        return None
 
     if prose is None:
         skip_tracker.total_skipped += 1
@@ -695,6 +927,16 @@ def _run_pipeline_inner(
     validator = PlanValidator()
     skip_tracker = SkipRateTracker()
 
+    # Create a single Anthropic client for all LLM calls in Phase 3 (prose
+    # generation + accuracy extraction).  None in dry-run mode.
+    if ANTHROPIC_AVAILABLE and config.anthropic_api_key is not None:
+        anthropic_client = anthropic.Anthropic(api_key=config.anthropic_api_key)
+    else:
+        anthropic_client = None
+
+    # Disagreement ledger: accumulates soft-judge records from every FAIL verdict.
+    ledger = DisagreementLedger()
+
     # Build a map from event_id → quality_plan for O(1) lookup.
     quality_plan_by_event: dict[str, QualityPlan] = {
         plan.trigger_event_id: plan for plan in quality_plans
@@ -736,7 +978,10 @@ def _run_pipeline_inner(
             validator=validator,
             skip_tracker=skip_tracker,
             config=config,
-            profile_name=profile.name,
+            profile=profile,
+            anthropic_client=anthropic_client,
+            kb_chunks=kb_chunks,
+            ledger=ledger,
         )
 
         if result is None:
@@ -750,7 +995,24 @@ def _run_pipeline_inner(
         f"{len(skipped_conv_ids)} skipped",
     )
 
-    # Emit cache telemetry summary for the prose generation phase.
+    # Wire disagreement ledger stats into skip_tracker for manifest output.
+    skip_tracker.disagreement_checks = len(ledger.records)
+    skip_tracker.disagreement_cases = sum(1 for r in ledger.records if r.disagreement)
+
+    # Log disagreement ledger health summary.
+    ledger_status, ledger_msg = ledger.check_health()
+    _log(config, f"  disagreement ledger: {ledger_msg}")
+    if ledger_status == "blocking":
+        _log(config, "  WARNING: disagreement rate exceeds 25% — corpus extraction may be unreliable")
+
+    # Log any gate violations (includes 15% warning and 25% block thresholds).
+    gate_violations = skip_tracker.check_gates()
+    for violation in gate_violations:
+        _log(config, f"  GATE: {violation}")
+
+    # Cache telemetry summary — placeholder for future re-enable of prompt caching.
+    # Caching was evaluated but removed because the system prompt (~83 tokens) is
+    # 25× below Haiku's 2048-token minimum threshold. See cache-diagnosis.md.
     _total_creation = skip_tracker.cache_creation_tokens
     _total_read = skip_tracker.cache_read_tokens
     _total_calls = skip_tracker.cache_api_calls
@@ -820,6 +1082,10 @@ def _run_pipeline_inner(
     # Serialise skipped conversation IDs.
     skipped_lines = [json.dumps({"conversation_id": cid}) for cid in skipped_conv_ids]
     atomic_write_jsonl(profile_dir / "skipped_conversations.jsonl", skipped_lines)
+
+    # Serialise disagreement ledger (empty in dry-run or when no FAIL verdicts occurred).
+    disagreement_lines = [r.model_dump_json() for r in ledger.records]
+    atomic_write_jsonl(profile_dir / "disagreements.jsonl", disagreement_lines)
 
     # Build manifest.
     manifest = Manifest(

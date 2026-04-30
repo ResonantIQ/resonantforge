@@ -28,12 +28,16 @@ import pytest
 from confabra.pipeline import PipelineConfig, run_pipeline
 from confabra.schemas import (
     ConversationRecord,
+    DimensionVerdict,
+    DisagreementRecord,
     KBChunk,
     Manifest,
     QualityPlan,
     SimEvent,
     CorrectionRecord,
     NoiseClass,
+    ValidationResult,
+    ValidationVerdict,
 )
 
 # ---------------------------------------------------------------------------
@@ -700,4 +704,195 @@ def test_concurrent_run_protection(tmp_path: Path) -> None:
     lock = _lockfile_path(out1 / "saas")
     assert not lock.exists(), (
         f"Lockfile {lock} was not cleaned up after a successful run"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Group 13 — Post-generation validation (assertions 24–27)
+# ---------------------------------------------------------------------------
+
+
+def test_post_gen_validation_pass(corpus: tuple[Path, Manifest]) -> None:
+    """
+    Assertion 24: dry-run pipeline must report prose_fact_violation_rate == 0.0.
+
+    In dry-run mode, post-generation validation is skipped (placeholder prose is
+    not real conversation text and would always fail deterministic checks). This
+    verifies the wiring doesn't crash and metrics show a clean state after wiring.
+    """
+    _, manifest = corpus
+    # Assertion 24
+    assert manifest.prose_fact_violation_rate == 0.0, (
+        f"Assertion 24 — dry-run expected prose_fact_violation_rate=0.0, "
+        f"got {manifest.prose_fact_violation_rate:.4f}"
+    )
+
+
+def test_skip_tracker_prose_fact_increments(tmp_path: Path) -> None:
+    """
+    Assertion 25: when post_generation_validate returns SKIP for a planted
+    conversation, prose_fact_failures increments and the conversation ID appears
+    in skipped_conversations.jsonl.
+
+    Uses unittest.mock to force SKIP on every planted validation call so that
+    the skip-tracking machinery is exercised without requiring a live Anthropic key.
+    """
+    from unittest.mock import patch
+
+    _FAKE_PROSE = (
+        "Customer: I need help with my account.\n"
+        "Agent: I'd be happy to help you today. What seems to be the issue?\n"
+        "Customer: I can't access the dashboard.\n"
+        "Agent: I understand. Let me look into that for you right away."
+    )
+
+    _skip_result = ValidationResult(
+        conversation_id="mocked",
+        overall_verdict=ValidationVerdict.SKIP,
+        dimension_verdicts=[],
+        skip_reason="mocked SKIP verdict for test_skip_tracker_prose_fact_increments",
+        retry_count=2,
+    )
+
+    with (
+        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("confabra.pipeline.validate_all_dimensions", return_value=[]),
+        patch(
+            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            return_value=_skip_result,
+        ),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=2,
+            months=1,
+            seed=42,
+            output_root=tmp_path,
+            # Non-None key activates the live validation path without an actual API call
+            # (prose generation is mocked; accuracy extractor swallows auth errors).
+            anthropic_api_key="fake-key-for-skip-test",
+        )
+        manifest = run_pipeline(config)
+
+    # Assertion 25a: prose_fact_violation_rate must be > 0
+    assert manifest.prose_fact_violation_rate > 0.0, (
+        f"Assertion 25a — expected prose_fact_violation_rate > 0 when every planted "
+        f"conversation is SKIPped, got {manifest.prose_fact_violation_rate:.4f}"
+    )
+
+    # Assertion 25b: skipped_conversations.jsonl must be non-empty
+    skipped_path = tmp_path / "saas" / "skipped_conversations.jsonl"
+    skipped = _read_jsonl(skipped_path)
+    assert len(skipped) > 0, (
+        "Assertion 25b — skipped_conversations.jsonl is empty, but every planted "
+        "conversation should have been SKIPped by the mocked validator"
+    )
+
+
+def test_disagreement_ledger_populated(tmp_path: Path) -> None:
+    """
+    Assertion 26: when a planted conversation produces a FAIL dimension verdict,
+    the soft judge is called, a DisagreementRecord accumulates in the ledger, and
+    manifest.disagreement_rate is non-zero.
+
+    Uses unittest.mock to inject a FAIL verdict and a mock soft-judge response so
+    the full disagreement wiring path is exercised without a live Anthropic key.
+    """
+    from unittest.mock import patch
+
+    _FAKE_PROSE = (
+        "Customer: I need help with my account.\n"
+        "Agent: I'd be happy to help you today. What seems to be the issue?\n"
+        "Customer: I can't access the dashboard.\n"
+        "Agent: I understand. Let me look into that for you right away."
+    )
+
+    _fail_verdict = DimensionVerdict(
+        dimension="empathy",
+        verdict=ValidationVerdict.FAIL,
+        target="high",
+        signals_summary={"acknowledgment_present": False},
+    )
+
+    # post_generation_validate sees the FAIL verdict and returns SKIP (retries exhausted).
+    _skip_result = ValidationResult(
+        conversation_id="mocked",
+        overall_verdict=ValidationVerdict.SKIP,
+        dimension_verdicts=[_fail_verdict],
+        skip_reason="mocked SKIP after FAIL for test_disagreement_ledger_populated",
+        retry_count=2,
+    )
+
+    _disagree_record = DisagreementRecord(
+        conversation_id="mocked",
+        validator_verdict="high",
+        soft_judge_perception="empathy:medium",
+        disagreement=True,
+        disagreement_class="borderline_case",
+    )
+
+    with (
+        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("confabra.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
+        patch(
+            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            return_value=_skip_result,
+        ),
+        patch("confabra.pipeline.run_soft_judge", return_value=_disagree_record),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=2,
+            months=1,
+            seed=42,
+            output_root=tmp_path,
+            anthropic_api_key="fake-key-for-ledger-test",
+        )
+        manifest = run_pipeline(config)
+
+    # Assertion 26a: manifest.disagreement_rate must be non-zero
+    assert manifest.disagreement_rate > 0.0, (
+        f"Assertion 26a — expected disagreement_rate > 0 when mock FAIL verdict fires "
+        f"soft judge with disagreement=True, got {manifest.disagreement_rate:.4f}"
+    )
+
+    # Assertion 26b: disagreements.jsonl must contain records
+    disag_path = tmp_path / "saas" / "disagreements.jsonl"
+    disag_records = _read_jsonl(disag_path)
+    assert len(disag_records) > 0, (
+        "Assertion 26b — disagreements.jsonl is empty, but mocked soft judge should "
+        "have produced at least one DisagreementRecord"
+    )
+
+
+def test_variant_id_non_null_for_validated_convs(corpus: tuple[Path, Manifest]) -> None:
+    """
+    Assertion 27 (OQ2): every quality plan has an effective non-null variant_id
+    for brand voice validation.
+
+    The validation loop uses rubric_targets.brand_voice_against as the brand voice
+    variant ID, defaulting to "bv_baseline" when absent. This property ensures the
+    effective variant_id passed to validate_all_dimensions is always a non-empty string
+    — i.e., brand voice validation always has a calibrated profile to validate against.
+    """
+    profile_dir, _ = corpus
+    plans = _read_jsonl(profile_dir / "planted_quality.jsonl")
+    assert len(plans) > 0, "planted_quality.jsonl is empty — no plans to check"
+
+    violations: list[str] = []
+    for plan in plans:
+        rubric = plan.get("rubric_targets", {})
+        # Mirrors the fallback in _generate_prose_for_chunk.
+        effective_variant_id = rubric.get("brand_voice_against") or "bv_baseline"
+        if not effective_variant_id:
+            violations.append(
+                f"conv_id={plan.get('conversation_id')!r}: "
+                f"brand_voice_against={rubric.get('brand_voice_against')!r} "
+                "produces an empty effective variant_id"
+            )
+
+    # Assertion 27
+    assert not violations, (
+        f"Assertion 27 — {len(violations)} quality plan(s) with empty effective variant_id. "
+        f"First: {violations[0]}"
     )

@@ -185,6 +185,81 @@ class Profile(ABC):
         """
         return {}
 
+    # ------------------------------------------------------------------
+    # Lexicon accessors — used by post-generation signal extractors.
+    # Each method must be implemented by every concrete profile.
+    # Raises NotImplementedError when the profile has not implemented the
+    # lexicon yet, so the gap surfaces rather than silently passing.
+    # ------------------------------------------------------------------
+
+    def acknowledgment_phrases(self) -> list[str]:
+        """Phrases indicating the agent acknowledges the customer's situation."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement acknowledgment_phrases()")
+
+    def emotion_lexicon(self) -> list[str]:
+        """Terms indicating emotional awareness."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement emotion_lexicon()")
+
+    def apology_lexicon(self) -> list[str]:
+        """Apology and regret terms."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement apology_lexicon()")
+
+    def action_verb_lexicon(self) -> list[str]:
+        """Action verbs for follow-through detection (must follow acknowledgment within N tokens)."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement action_verb_lexicon()")
+
+    def hedging_lexicon(self) -> list[str]:
+        """Hedging terms associated with a warm/exploratory voice."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement hedging_lexicon()")
+
+    def directive_lexicon(self) -> list[str]:
+        """Directive/imperative terms associated with a direct/clinical voice."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement directive_lexicon()")
+
+    def warm_terms(self) -> list[str]:
+        """Vocabulary characteristic of the warm brand voice variant."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement warm_terms()")
+
+    def clinical_terms(self) -> list[str]:
+        """Vocabulary characteristic of the clinical/formal brand voice variant."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement clinical_terms()")
+
+    def contraction_patterns(self) -> list[str]:
+        """Regex patterns detecting contractions (high count = lower formality score)."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement contraction_patterns()")
+
+    def resolution_patterns(self) -> list[str]:
+        """Regex patterns indicating a solution has been provided."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement resolution_patterns()")
+
+    def deflection_patterns(self) -> list[str]:
+        """Regex patterns indicating deflection without substantive help."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement deflection_patterns()")
+
+    def next_steps_patterns(self) -> list[str]:
+        """Regex patterns for future-tense / next-steps language."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement next_steps_patterns()")
+
+    def temporal_anchor_patterns(self) -> list[str]:
+        """Regex patterns for temporal anchors that make next steps actionable."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement temporal_anchor_patterns()")
+
+    def specific_actor_patterns(self) -> list[str]:
+        """Regex patterns for specific-actor references that make next steps actionable."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement specific_actor_patterns()")
+
+    def ownership_patterns(self) -> list[str]:
+        """Regex patterns for ownership language."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement ownership_patterns()")
+
+    def issue_keywords(self) -> list[str]:
+        """Keywords that appear in customer descriptions of their issue."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement issue_keywords()")
+
+    def synonym_map(self) -> dict[str, str]:
+        """Synonym mapping for KB text normalization in the accuracy extractor."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement synonym_map()")
+
     def planted_quality_count(self) -> int:
         """
         Number of planted quality conversations for this profile.

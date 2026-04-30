@@ -160,6 +160,61 @@ class PSProfile(Profile):
         """Return calibrated feature profiles from the ps lexicon module."""
         return ps_lex.BRAND_VOICE_FEATURE_PROFILES
 
+    # ------------------------------------------------------------------
+    # Lexicon accessors — delegate to ps lexicon module constants
+    # ------------------------------------------------------------------
+
+    def acknowledgment_phrases(self) -> list[str]:
+        return ps_lex.ACKNOWLEDGMENT_PHRASES
+
+    def emotion_lexicon(self) -> list[str]:
+        return ps_lex.EMOTION_LEXICON
+
+    def apology_lexicon(self) -> list[str]:
+        return ps_lex.APOLOGY_LEXICON
+
+    def action_verb_lexicon(self) -> list[str]:
+        return ps_lex.ACTION_VERB_LEXICON
+
+    def hedging_lexicon(self) -> list[str]:
+        return ps_lex.HEDGING_LEXICON
+
+    def directive_lexicon(self) -> list[str]:
+        return ps_lex.DIRECTIVE_LEXICON
+
+    def warm_terms(self) -> list[str]:
+        return ps_lex.WARM_TERMS
+
+    def clinical_terms(self) -> list[str]:
+        return ps_lex.CLINICAL_TERMS
+
+    def contraction_patterns(self) -> list[str]:
+        return ps_lex.CONTRACTION_PATTERNS
+
+    def resolution_patterns(self) -> list[str]:
+        return ps_lex.RESOLUTION_PATTERNS
+
+    def deflection_patterns(self) -> list[str]:
+        return ps_lex.DEFLECTION_PATTERNS
+
+    def next_steps_patterns(self) -> list[str]:
+        return ps_lex.NEXT_STEPS_PATTERNS
+
+    def temporal_anchor_patterns(self) -> list[str]:
+        return ps_lex.TEMPORAL_ANCHOR_PATTERNS
+
+    def specific_actor_patterns(self) -> list[str]:
+        return ps_lex.SPECIFIC_ACTOR_PATTERNS
+
+    def ownership_patterns(self) -> list[str]:
+        return ps_lex.OWNERSHIP_PATTERNS
+
+    def issue_keywords(self) -> list[str]:
+        return ps_lex.ISSUE_KEYWORDS
+
+    def synonym_map(self) -> dict[str, str]:
+        return ps_lex.SYNONYM_MAP
+
     def planted_quality_count(self) -> int:
         """PS plants 15 quality conversations for vocabulary-overfit smoke testing."""
         return 15

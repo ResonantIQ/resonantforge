@@ -89,6 +89,10 @@ class SkipRateTracker:
             violations.append(
                 f"quality_rule_rate={self.quality_rule_rate:.3f} > 0.02"
             )
+        if 0.15 < self.disagreement_rate <= 0.25:
+            violations.append(
+                f"WARNING: disagreement_rate={self.disagreement_rate:.3f} > 0.15 (approaching 25% block threshold)"
+            )
         if self.disagreement_rate > 0.25:
             violations.append(
                 f"disagreement_rate={self.disagreement_rate:.3f} > 0.25 (blocks extraction)"
