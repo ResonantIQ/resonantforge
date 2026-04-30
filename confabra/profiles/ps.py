@@ -156,10 +156,6 @@ class PSProfile(Profile):
             CorrectionPattern("empathy", "upward", "cross_tenant_boundary", "tenant B PS correction: empathy upward on technically correct but cold responses"),
         ]
 
-    def get_lexicons(self):
-        """Return the ps lexicon module."""
-        return ps_lex
-
     def brand_voice_feature_profiles(self) -> dict:
         """Return calibrated feature profiles from the ps lexicon module."""
         return ps_lex.BRAND_VOICE_FEATURE_PROFILES

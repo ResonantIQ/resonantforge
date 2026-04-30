@@ -282,10 +282,6 @@ class SaaSProfile(Profile):
             CorrectionPattern("accuracy", "downward", "cross_tenant_boundary", "tenant B systematic correction: accuracy downward when KB not explicitly cited"),
         ]
 
-    def get_lexicons(self):
-        """Return the saas lexicon module."""
-        return saas_lex
-
     def brand_voice_feature_profiles(self) -> dict:
         """Return calibrated feature profiles from the saas lexicon module."""
         return saas_lex.BRAND_VOICE_FEATURE_PROFILES

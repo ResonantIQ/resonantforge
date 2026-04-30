@@ -175,15 +175,6 @@ class Profile(ABC):
     def correction_pattern_set(self) -> list[CorrectionPattern]:
         """Return the planted correction patterns for this profile."""
 
-    def get_lexicons(self):
-        """
-        Return the profile's lexicon module.
-
-        Concrete implementations override this to return their profile-specific
-        lexicon module (e.g. confabra.profiles.lexicons.saas).
-        """
-        raise NotImplementedError
-
     def brand_voice_feature_profiles(self) -> dict:
         """
         Return calibrated feature profiles for brand voice variants.
