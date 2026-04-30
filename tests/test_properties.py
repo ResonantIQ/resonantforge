@@ -407,48 +407,81 @@ def test_agent_causal_integrity(corpus: tuple[Path, Manifest]) -> None:
         traj_rows = _read_jsonl(traj_path) if traj_path.exists() else []
 
         # Build a map: conversation_id → list of scored_at ISO strings
+        # (used by assertion 15 to verify causal ordering)
         conv_scored_at: dict[str, list[str]] = {}
         for row in traj_rows:
             cid = row["conversation_id"]
             conv_scored_at.setdefault(cid, []).append(row["scored_at"])
 
-        # Build set of known coaching_ids from coaching_history.
+        # Read coaching history for this agent.
         coaching_path = agent_dir / "coaching_history.jsonl"
         coaching_rows = _read_jsonl(coaching_path) if coaching_path.exists() else []
-        coaching_ids: set[str] = {c["coaching_id"] for c in coaching_rows}
 
-        # --- Assertion 15: triggering_conversation_id precedes coaching issued_at ---
+        # Build map: coaching_id → issued_at (same-agent only)
+        coaching_id_to_issued_at: dict[str, str] = {
+            c["coaching_id"]: c["issued_at"] for c in coaching_rows
+        }
+        coaching_ids: set[str] = set(coaching_id_to_issued_at)
+
+        # --- Assertion 15 (strengthened): triggering_conversation_id precedes coaching
+        #     issued_at by at least 1 minute, AND the conversation belongs to this agent's
+        #     own trajectory (not any other agent's). ---
+        # Minimum delta chosen to guard against same-timestamp boundary cases: the
+        # generator always places coaching events ≥8 hours after the last pre-coaching
+        # row, so 60 seconds is a safe floor that the current fixtures already satisfy.
+        _MIN_DELTA_SECONDS = 60
         for coaching in coaching_rows:
             trigger_cid = coaching["triggering_conversation_id"]
             issued_at = coaching["issued_at"]
 
-            # The triggering conversation must appear in the trajectory.
+            # The triggering conversation must appear in THIS agent's own trajectory.
             if trigger_cid not in conv_scored_at:
                 v15.append(
                     f"{agent_id}: coaching_id={coaching['coaching_id']!r} "
                     f"triggering_conversation_id={trigger_cid!r} "
-                    f"not found in score_trajectory"
+                    f"not found in this agent's score_trajectory"
                 )
                 continue
 
-            # At least one trajectory row for that conversation must predate issued_at.
-            any_before = any(
-                scored_at < issued_at for scored_at in conv_scored_at[trigger_cid]
+            # At least one trajectory row for that conversation must be strictly before
+            # issued_at by at least _MIN_DELTA_SECONDS seconds.
+            from datetime import datetime, timezone as _tz
+
+            def _parse_dt(s: str) -> datetime:
+                return datetime.fromisoformat(s)
+
+            issued_dt = _parse_dt(issued_at)
+            any_before_with_delta = any(
+                (issued_dt - _parse_dt(scored_at)).total_seconds() >= _MIN_DELTA_SECONDS
+                for scored_at in conv_scored_at[trigger_cid]
             )
-            if not any_before:
+            if not any_before_with_delta:
                 v15.append(
                     f"{agent_id}: coaching_id={coaching['coaching_id']!r} "
-                    f"issued_at={issued_at} but all trajectory rows for "
-                    f"{trigger_cid!r} are at or after that timestamp"
+                    f"issued_at={issued_at} but no trajectory row for "
+                    f"{trigger_cid!r} precedes it by ≥{_MIN_DELTA_SECONDS}s"
                 )
 
-        # --- Assertion 16: post_coaching_of references a known coaching_id ---
+        # --- Assertion 16 (strengthened): post_coaching_of must reference a coaching_id
+        #     in the SAME agent's history, and the coaching's issued_at must be strictly
+        #     before this trajectory row's scored_at (post_coaching ordering invariant). ---
         for row in traj_rows:
             post_of = row.get("post_coaching_of")
-            if post_of is not None and post_of not in coaching_ids:
+            if post_of is None:
+                continue
+            if post_of not in coaching_ids:
                 v16.append(
                     f"{agent_id}: trajectory_id={row['trajectory_id']!r} "
-                    f"post_coaching_of={post_of!r} not in coaching_history"
+                    f"post_coaching_of={post_of!r} not in this agent's coaching_history"
+                )
+                continue
+            # Temporal: coaching.issued_at must be strictly before row.scored_at
+            coaching_issued = coaching_id_to_issued_at[post_of]
+            if coaching_issued >= row["scored_at"]:
+                v16.append(
+                    f"{agent_id}: trajectory_id={row['trajectory_id']!r} "
+                    f"post_coaching_of={post_of!r} coaching issued_at={coaching_issued} "
+                    f"is not strictly before row scored_at={row['scored_at']}"
                 )
 
         # --- Assertion 17: new agents have zero coaching events ---
@@ -513,7 +546,9 @@ def test_corrections_referential_integrity(corpus: tuple[Path, Manifest]) -> Non
         f"First: {v18[0]}"
     )
 
-    # Assertion 19: cross-tenant corrections must not use real agent IDs
+    # Assertion 19 (strengthened): cross-tenant corrections must not use real agent IDs,
+    # AND no real agent in the pool may have an agent_id that starts with "tenant_b_"
+    # (catches the case where a real agent is accidentally mis-prefixed).
     v19: list[str] = []
     for i, row in enumerate(raw_corrections):
         aid = row["agent_id"]
@@ -524,8 +559,16 @@ def test_corrections_referential_integrity(corpus: tuple[Path, Manifest]) -> Non
                 f"a real agent ID — tenant isolation is broken"
             )
 
+    # Inverse check: no real agent may carry the cross-tenant prefix.
+    for aid in sorted(real_agent_ids):
+        if aid.startswith(_CROSS_TENANT_PREFIX):
+            v19.append(
+                f"real agent {aid!r} starts with cross-tenant prefix {_CROSS_TENANT_PREFIX!r} "
+                f"— this agent would be silently excluded from cross-tenant joins by name pattern"
+            )
+
     assert not v19, (
-        f"Assertion 19 — {len(v19)} cross-tenant correction(s) reference real agents. "
+        f"Assertion 19 — {len(v19)} cross-tenant isolation violation(s). "
         f"First: {v19[0]}"
     )
 
