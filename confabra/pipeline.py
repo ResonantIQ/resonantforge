@@ -25,7 +25,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from confabra.agents.generator import generate_agents
 from confabra.corrections.generator import generate_corrections
@@ -68,6 +68,10 @@ try:
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
+
+from rich.console import Console, Group
+from rich.live import Live
+from rich.text import Text
 
 
 # ---------------------------------------------------------------------------
@@ -644,6 +648,7 @@ def _generate_prose_for_chunk(
     kb_chunks: list,
     ledger: DisagreementLedger,
     skipped_records: "list[SkippedConversationRecord]",
+    progress_cb: Callable[[str], None] | None = None,
 ) -> ConversationRecord | None:
     """
     Generate prose for one (account_id, month_index, conv_event) chunk.
@@ -681,6 +686,10 @@ def _generate_prose_for_chunk(
     Returns:
         A ConversationRecord on success, or None if the chunk was skipped.
     """
+    def _progress(status: str) -> None:
+        if progress_cb is not None:
+            progress_cb(status)
+
     # ------------------------------------------------------------------
     # Stage 1 — pre-prompt validation (always, including dry-run)
     # ------------------------------------------------------------------
@@ -697,6 +706,7 @@ def _generate_prose_for_chunk(
                 config,
                 f"  PRE-PROMPT FAIL (skip) {conv_id}: {pre_result.skip_reason}",
             )
+            _progress("skipped: pre-prompt fail")
             skipped_records.append(_make_skipped_record(
                 conv_id, account_id, conv_event, quality_plan,
                 final_retry_count=0, validator_verdicts=[], prose=None,
@@ -721,6 +731,8 @@ def _generate_prose_for_chunk(
     last_validator_verdicts: list = []  # updated after each validation run; used for skip records
 
     for attempt in range(max_retries + 1):
+        if attempt > 0:
+            _progress(f"retry {attempt} · generating prose")
         if anthropic_client is None:
             # Dry-run: generate deterministic placeholder prose.
             prose = (
@@ -746,6 +758,7 @@ def _generate_prose_for_chunk(
                 if attempt >= max_retries:
                     skip_tracker.prose_fact_failures += 1
                     skip_tracker.total_skipped += 1
+                    _progress("skipped: API error")
                     skipped_records.append(_make_skipped_record(
                         conv_id, account_id, conv_event, quality_plan,
                         final_retry_count=attempt, validator_verdicts=last_validator_verdicts,
@@ -768,6 +781,7 @@ def _generate_prose_for_chunk(
             agent_prose, customer_prose = _split_prose_turns(prose)
             lexicons = _load_lexicons(profile)
 
+            _progress("validating empathy")
             empathy_signals = extract_empathy_signals(
                 agent_prose,
                 lexicons.acknowledgment_phrases,
@@ -775,6 +789,7 @@ def _generate_prose_for_chunk(
                 lexicons.apology_lexicon,
                 lexicons.action_verb_lexicon,
             )
+            _progress("validating resolution")
             resolution_signals = extract_resolution_signals(
                 agent_prose,
                 customer_prose,
@@ -786,6 +801,7 @@ def _generate_prose_for_chunk(
                 lexicons.ownership_patterns,
                 lexicons.issue_keywords,
             )
+            _progress("validating brand_voice")
             brand_voice_signals = extract_brand_voice_signals(
                 agent_prose,
                 lexicons.hedging_lexicon,
@@ -794,6 +810,7 @@ def _generate_prose_for_chunk(
                 lexicons.clinical_terms,
                 lexicons.contraction_patterns,
             )
+            _progress("validating accuracy")
             accuracy_signals = extract_accuracy_signals(
                 agent_prose,
                 customer_prose,
@@ -843,11 +860,13 @@ def _generate_prose_for_chunk(
             )
 
             if post_result.overall_verdict == ValidationVerdict.PASS:
+                _progress("passed")
                 break
             elif post_result.overall_verdict == ValidationVerdict.SKIP:
                 skip_tracker.prose_fact_failures += 1
                 skip_tracker.total_skipped += 1
                 _log(config, f"  POST-GEN SKIP {conv_id}: {post_result.skip_reason}")
+                _progress(f"skipped: {post_result.skip_reason or 'validation'}")
                 skipped_records.append(_make_skipped_record(
                     conv_id, account_id, conv_event, quality_plan,
                     final_retry_count=attempt, validator_verdicts=validator_verdicts,
@@ -859,11 +878,13 @@ def _generate_prose_for_chunk(
                 continue
         else:
             # Organic conversation, or dry-run mode — no post-generation validation.
+            _progress("passed")
             break
     else:
         # Retry loop exhausted without break (should not occur — SKIP path returns above).
         skip_tracker.prose_fact_failures += 1
         skip_tracker.total_skipped += 1
+        _progress("skipped: retries exhausted")
         skipped_records.append(_make_skipped_record(
             conv_id, account_id, conv_event, quality_plan,
             final_retry_count=max_retries, validator_verdicts=last_validator_verdicts,
@@ -873,6 +894,7 @@ def _generate_prose_for_chunk(
 
     if prose is None:
         skip_tracker.total_skipped += 1
+        _progress("skipped: no prose generated")
         skipped_records.append(_make_skipped_record(
             conv_id, account_id, conv_event, quality_plan,
             final_retry_count=0, validator_verdicts=[], prose=None,
@@ -1036,48 +1058,87 @@ def _run_pipeline_inner(
     all_conversations: list[ConversationRecord] = []
     skipped_records: list[SkippedConversationRecord] = []
 
-    # Iterate deterministically: all accounts, all months, all conv events in
-    # the order they appear in the event log.
-    for event in events:
-        if event.event_type != SimEventType.CONVERSATION_STARTED:
-            continue
+    # Phase 3 progress display setup.
+    total_convs = sum(1 for e in events if e.event_type == SimEventType.CONVERSATION_STARTED)
+    _p3_passed = 0
+    _p3_skipped = 0
+    _progress_console = Console()
+    _is_tty = _progress_console.is_terminal
 
-        account_id = event.account_id
-        month_index = event.month_index
-
-        # Conversation ID: embed event_id for traceability.
-        conv_id = f"conv_{event.event_id}"
-
-        # Find matching quality plan (if any).
-        quality_plan = quality_plan_by_event.get(event.event_id)
-
-        # Retrieve snapshot and full account events for validation.
-        account_snapshot = _find_account_snapshot(account_id, event.day_index, snapshots)
-        account_events = _find_account_events(account_id, events)
-
-        result = _generate_prose_for_chunk(
-            conv_id=conv_id,
-            account_id=account_id,
-            month_index=month_index,
-            conv_event=event,
-            quality_plan=quality_plan,
-            account_snapshot=account_snapshot,
-            account_events=account_events,
-            emitter=emitter,
-            validator=validator,
-            skip_tracker=skip_tracker,
-            config=config,
-            profile=profile,
-            anthropic_client=anthropic_client,
-            kb_chunks=kb_chunks,
-            ledger=ledger,
-            skipped_records=skipped_records,
+    def _p3_header_text() -> Text:
+        pending = total_convs - _p3_passed - _p3_skipped
+        return Text(
+            f"  [{_p3_passed}/{total_convs}] passed · "
+            f"[{_p3_skipped}/{total_convs}] skipped · "
+            f"[{pending}/{total_convs}] pending"
         )
 
-        if result is None:
-            pass  # SkippedConversationRecord was appended to skipped_records inside the call
-        else:
-            all_conversations.append(result)
+    # Iterate deterministically: all accounts, all months, all conv events in
+    # the order they appear in the event log.
+    with Live(console=_progress_console, refresh_per_second=10) as live:
+        for event in events:
+            if event.event_type != SimEventType.CONVERSATION_STARTED:
+                continue
+
+            account_id = event.account_id
+            month_index = event.month_index
+
+            # Conversation ID: embed event_id for traceability.
+            conv_id = f"conv_{event.event_id}"
+
+            # Find matching quality plan (if any).
+            quality_plan = quality_plan_by_event.get(event.event_id)
+
+            # Retrieve snapshot and full account events for validation.
+            account_snapshot = _find_account_snapshot(account_id, event.day_index, snapshots)
+            account_events = _find_account_events(account_id, events)
+
+            conv_index = _p3_passed + _p3_skipped + 1
+
+            def _make_progress_cb(
+                _idx: int = conv_index,
+                _cid: str = conv_id,
+                _aid: str = account_id,
+            ) -> Callable[[str], None]:
+                def _cb(status: str) -> None:
+                    line = f"[{_idx}/{total_convs}] {_cid} · {_aid} · {status}"
+                    if _is_tty:
+                        live.update(Group(_p3_header_text(), Text(f"  {line}")))
+                    else:
+                        _progress_console.print(line)
+                return _cb
+
+            progress_cb = _make_progress_cb()
+            progress_cb("generating prose")
+
+            result = _generate_prose_for_chunk(
+                conv_id=conv_id,
+                account_id=account_id,
+                month_index=month_index,
+                conv_event=event,
+                quality_plan=quality_plan,
+                account_snapshot=account_snapshot,
+                account_events=account_events,
+                emitter=emitter,
+                validator=validator,
+                skip_tracker=skip_tracker,
+                config=config,
+                profile=profile,
+                anthropic_client=anthropic_client,
+                kb_chunks=kb_chunks,
+                ledger=ledger,
+                skipped_records=skipped_records,
+                progress_cb=progress_cb,
+            )
+
+            if result is None:
+                _p3_skipped += 1
+            else:
+                _p3_passed += 1
+                all_conversations.append(result)
+
+            if _is_tty:
+                live.update(_p3_header_text())
 
     _log(
         config,
