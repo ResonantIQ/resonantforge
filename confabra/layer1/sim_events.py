@@ -5,7 +5,7 @@ from confabra.schemas import SimEventType
 # Registry: event_type → required payload fields
 SIM_EVENT_REGISTRY: dict[str, list[str]] = {
     SimEventType.ACCOUNT_CREATED: ["plan_tier", "industry"],
-    SimEventType.CONVERSATION_STARTED: ["surface_channel", "agent_id", "customer_name"],
+    SimEventType.CONVERSATION_STARTED: ["surface_channel", "agent_id", "customer_name", "domain"],
     SimEventType.CONVERSATION_ENDED: ["duration_minutes", "turn_count", "resolution_status"],
     SimEventType.PAYMENT_RECEIVED: ["amount_cents", "plan_tier"],
     SimEventType.PAYMENT_FAILED: ["amount_cents", "failure_reason"],

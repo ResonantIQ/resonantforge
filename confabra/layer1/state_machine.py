@@ -129,6 +129,9 @@ class StateMachine:
         self.snapshots: list[DaySnapshot] = []
         self._event_counter = 0
         self._snapshot_counter = 0
+        # Cycle index for conversation domain assignment (PR1 hardcoded distribution).
+        # PR2 will replace this with profile-defined weighted sampling.
+        self._conv_domain_counter = 0
 
     # ------------------------------------------------------------------
     # ID helpers
@@ -299,6 +302,11 @@ class StateMachine:
                     agent = self.rng.choice(active_agents_today)
                     # Reserve the conv_id before emitting any events for it
                     conv_id = f"conv_{self._event_counter + 1:05d}"
+                    # Assign a domain by cycling through the three-domain list.
+                    # PR2 will replace this with profile-defined weighted distribution.
+                    _DOMAINS = ["billing", "api", "refunds"]
+                    _domain = _DOMAINS[self._conv_domain_counter % len(_DOMAINS)]
+                    self._conv_domain_counter += 1
                     self._emit_event(
                         event_type=SimEventType.CONVERSATION_STARTED,
                         account_id=account.account_id,
@@ -311,6 +319,8 @@ class StateMachine:
                             "surface_channel": "intercom",
                             "agent_id": agent,
                             "customer_name": f"Customer_{account.account_id}",
+                            "domain": _domain,
+                            "intent": [],
                         },
                     )
                     duration = self.rng.randint(5, 45)

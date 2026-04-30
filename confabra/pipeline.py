@@ -43,6 +43,7 @@ from confabra.schemas import (
     DaySnapshot,
     GateSeverity,
     GateViolation,
+    KBChunk,
     Manifest,
     QualityPlan,
     SimEvent,
@@ -962,6 +963,10 @@ def _run_pipeline_inner(
     # ==================================================================
     _log(config, "Phase 1: state planning")
 
+    # Create the profile output directory early so KB generation (which runs
+    # before quality plan injection) can write its subdirectory.
+    profile_dir.mkdir(parents=True, exist_ok=True)
+
     # 1b. Run state machine — returns (events, snapshots).
     sm = StateMachine(
         seed=config.seed,
@@ -975,13 +980,21 @@ def _run_pipeline_inner(
     # 1c. Build snapshot emitter (takes snapshots + events).
     emitter = SnapshotEmitter(snapshots=snapshots, events=events)
 
-    # 1d. Inject quality plans.
+    # 1e. Generate KB chunks now (before injection) so that domain-based chunk
+    # selection in the injector can reference real chunk metadata.  The chunks
+    # list is generated once here and re-used in Phase 2 for serialisation —
+    # no second generation pass occurs.
+    kb_chunks, kb_hash = generate_kb(profile.name, profile_dir)
+    _log(config, f"  {len(kb_chunks)} KB chunks pre-generated for injection, hash={kb_hash[:16]}…")
+
+    # 1d. Inject quality plans — passes real KB chunks so domain-based selection works.
     # QualityPlanInjector takes a seeded RNG (not a raw seed integer).
     injector_rng = random.Random(config.seed)
     injector = QualityPlanInjector(rng=injector_rng, profile_name=profile.name)
     quality_plans: list[QualityPlan] = injector.inject(
         events=events,
         snapshots=snapshots,
+        kb_chunks=kb_chunks,
     )
     _log(config, f"  {len(quality_plans)} quality plans injected")
 
@@ -990,11 +1003,8 @@ def _run_pipeline_inner(
     # ==================================================================
     _log(config, "Phase 2: corpus-config artifacts")
 
-    profile_dir.mkdir(parents=True, exist_ok=True)
-
-    # KB generation — output_dir arg is the profile dir (generator creates
-    # the knowledge_base subdirectory itself).
-    kb_chunks, kb_hash = generate_kb(profile.name, profile_dir)
+    # KB chunks were already generated in Phase 1 (before injection).
+    # profile_dir was also created in Phase 1.
     _log(config, f"  {len(kb_chunks)} KB chunks, hash={kb_hash[:16]}…")
 
     # Apply cross-contamination to KB.
@@ -1243,6 +1253,30 @@ def _run_pipeline_inner(
     disagreement_lines = [r.model_dump_json() for r in ledger.records]
     atomic_write_jsonl(profile_dir / "disagreements.jsonl", disagreement_lines)
 
+    # --- KB domain telemetry ---
+    # kb_version: deterministic hash of sorted chunk_ids + chunk_text.
+    _kb_version_source = "".join(
+        c.chunk_id + c.chunk_text
+        for c in sorted(kb_chunks, key=lambda c: c.chunk_id)
+    )
+    _kb_version = hashlib.sha256(_kb_version_source.encode()).hexdigest()
+
+    # domain_distribution_observed: count CONVERSATION_STARTED events per domain.
+    _domain_dist: dict[str, int] = {}
+    for e in events:
+        if e.event_type == SimEventType.CONVERSATION_STARTED:
+            _d = e.payload.get("domain", "")
+            if _d:
+                _domain_dist[_d] = _domain_dist.get(_d, 0) + 1
+
+    # chunk_selection_frequency: count how many times each chunk_id appeared
+    # in any quality plan's should_cite or must_not_cite (excluding the wildcard "*").
+    _chunk_freq: dict[str, int] = {}
+    for qp in quality_plans:
+        for cid in qp.knowledge_citations.should_cite + qp.knowledge_citations.must_not_cite:
+            if cid != "*":
+                _chunk_freq[cid] = _chunk_freq.get(cid, 0) + 1
+
     # Build manifest.  gate_aborted=True and gate_violations are set when a hard
     # gate fires; the manifest is always written before raising so the run is
     # inspectable even on abort.
@@ -1280,6 +1314,10 @@ def _run_pipeline_inner(
         cache_estimated_savings_usd=_estimated_savings_usd,
         gate_aborted=bool(gate_errors),
         gate_violations=[v.model_dump() for v in gate_violations],
+        kb_version=_kb_version,
+        kb_chunk_count=kb_chunk_count,
+        domain_distribution_observed=_domain_dist,
+        chunk_selection_frequency=_chunk_freq,
     )
 
     manifest_path = profile_dir / "manifest.json"

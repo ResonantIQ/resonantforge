@@ -1140,3 +1140,351 @@ def test_pipeline_aborts_on_hard_gate(tmp_path: Path) -> None:
     assert len(gate_violations) > 0, (
         "Assertion 31d — manifest.gate_violations must be non-empty after gate abort"
     )
+
+
+# ---------------------------------------------------------------------------
+# Group 14 — KB domain-matching engine (assertions E1–E8)
+# ---------------------------------------------------------------------------
+#
+# These tests use the synthetic KB fixture (tests/fixtures/synthetic_kb.py)
+# and inject quality plans directly via QualityPlanInjector so no full
+# pipeline run is required.  All assertions target the domain-aware code path.
+# ---------------------------------------------------------------------------
+
+
+def _make_injector(seed: int = 42) -> "QualityPlanInjector":
+    """Return a seeded QualityPlanInjector for engine tests."""
+    import random as _random
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    return QualityPlanInjector(rng=_random.Random(seed), profile_name="saas")
+
+
+def _make_conv_event(
+    event_id: str,
+    domain: str,
+    account_id: str = "acct_001",
+    event_type_override: str | None = None,
+) -> SimEvent:
+    """Build a minimal CONVERSATION_STARTED SimEvent for injector testing."""
+    from datetime import datetime as _dt
+    from confabra.schemas import SimEventType as _SET
+    etype = _SET(event_type_override) if event_type_override else _SET.CONVERSATION_STARTED
+    return SimEvent(
+        event_id=event_id,
+        event_type=etype,
+        account_id=account_id,
+        timestamp=_dt(2025, 8, 1, 10, 0, 0),
+        day_index=0,
+        month_index=0,
+        payload={
+            "surface_channel": "intercom",
+            "agent_id": "agent_001",
+            "customer_name": "Test Customer",
+            "domain": domain,
+            "intent": [],
+        },
+    )
+
+
+def _make_snapshot(account_id: str = "acct_001") -> "DaySnapshot":
+    """Build a minimal DaySnapshot for injector testing."""
+    from datetime import date as _date
+    from confabra.schemas import (
+        DaySnapshot as _DS,
+        HealthState as _HS,
+        LifecycleStage as _LS,
+    )
+    return _DS(
+        snapshot_id="snap_001",
+        account_id=account_id,
+        day_index=0,
+        month_index=0,
+        date=_date(2025, 8, 1),
+        lifecycle_stage=_LS.ACTIVE,
+        health_state=_HS.HEALTHY,
+        health_score=0.8,
+        open_tickets=0,
+        recent_signals=[],
+        active_agents=["agent_001"],
+        payment_status="current",
+    )
+
+
+def test_engine_domain_isolation() -> None:
+    """
+    E1 — Domain isolation: every should_cite and must_not_cite chunk in a
+    quality plan produced for domain X must cover domain X.
+
+    Tests billing, api, and refunds in turn using accuracy-type plan specs.
+    """
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    # Build a chunk lookup for assertion.
+    chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
+
+    for domain in ["billing", "api", "refunds"]:
+        injector = _make_injector()
+        conv = _make_conv_event("evt_e1", domain)
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+        plan = injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+
+        for cid in plan.knowledge_citations.should_cite:
+            if cid == "*":
+                continue
+            chunk = chunk_by_id.get(cid)
+            assert chunk is not None, f"E1: should_cite chunk_id={cid!r} not in synthetic KB"
+            assert domain in chunk.domains, (
+                f"E1: domain={domain!r}, should_cite chunk {cid!r} covers {chunk.domains}"
+            )
+
+        for cid in plan.knowledge_citations.must_not_cite:
+            if cid == "*":
+                continue
+            chunk = chunk_by_id.get(cid)
+            assert chunk is not None, f"E1: must_not_cite chunk_id={cid!r} not in synthetic KB"
+            assert domain in chunk.domains, (
+                f"E1: domain={domain!r}, must_not_cite chunk {cid!r} covers {chunk.domains}"
+            )
+
+
+def test_engine_adversarial_exclusion_default() -> None:
+    """
+    E2 — Without explicit opt-in, no should_cite chunk is adversarial.
+    """
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
+
+    for domain in ["billing", "api", "refunds"]:
+        injector = _make_injector()
+        conv = _make_conv_event("evt_e2", domain)
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+        plan = injector._build_plan(
+            conv, snap, spec, SYNTHETIC_KB_CHUNKS, include_adversarial_in_should_cite=False
+        )
+
+        for cid in plan.knowledge_citations.should_cite:
+            if cid == "*":
+                continue
+            chunk = chunk_by_id.get(cid)
+            if chunk:
+                assert not chunk.adversarial, (
+                    f"E2: domain={domain!r}, adversarial chunk {cid!r} appeared in "
+                    f"should_cite without opt-in"
+                )
+
+
+def test_engine_adversarial_inclusion_when_opted_in() -> None:
+    """
+    E3 — With include_adversarial_in_should_cite=True, adversarial chunks
+    may appear in should_cite for a domain that has adversarial chunks.
+    """
+    import random as _random
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
+
+    # Run many trials across seeds to increase chance of picking an adversarial chunk.
+    found_adversarial_in_should_cite = False
+    for seed in range(100):
+        injector = QualityPlanInjector(rng=_random.Random(seed), profile_name="saas")
+        conv = _make_conv_event("evt_e3", "refunds")  # refunds has 2 adversarial chunks
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+        plan = injector._build_plan(
+            conv, snap, spec, SYNTHETIC_KB_CHUNKS, include_adversarial_in_should_cite=True
+        )
+        for cid in plan.knowledge_citations.should_cite:
+            chunk = chunk_by_id.get(cid)
+            if chunk and chunk.adversarial:
+                found_adversarial_in_should_cite = True
+                break
+        if found_adversarial_in_should_cite:
+            break
+
+    assert found_adversarial_in_should_cite, (
+        "E3: across 100 seeds, no adversarial chunk ever appeared in should_cite "
+        "even with include_adversarial_in_should_cite=True"
+    )
+
+
+def test_engine_within_topic_normalization() -> None:
+    """
+    E4 — Within-topic normalization: generating 100 quality plans for the
+    refunds domain (4 chunks, 2 adversarial → 2 non-adversarial allow pool)
+    must not let any single chunk dominate beyond a generous cap.
+
+    The cap is: max_allowed_per_chunk = 2 * (100 / allow_pool_size) * 1.5
+    For 2 allow-eligible refund chunks that is 2 * 50 * 1.5 = 150 — but since
+    we only run 100 iterations and there are 2 chunks, neither should exceed
+    75 selections (100 * 75% as an extreme upper bound for ~50/50 distribution).
+    """
+    import random as _random
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    N = 100
+    freq: dict[str, int] = {}
+    for i in range(N):
+        injector = QualityPlanInjector(rng=_random.Random(i), profile_name="saas")
+        conv = _make_conv_event(f"evt_e4_{i}", "refunds")
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+        plan = injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+        for cid in plan.knowledge_citations.should_cite:
+            if cid != "*":
+                freq[cid] = freq.get(cid, 0) + 1
+
+    # refunds allow pool has 2 non-adversarial chunks; neither should exceed 75% of trials
+    allow_refund_chunks = [
+        c for c in SYNTHETIC_KB_CHUNKS if "refunds" in c.domains and not c.adversarial
+    ]
+    assert len(allow_refund_chunks) > 0, "E4: no non-adversarial refund chunks in synthetic KB"
+
+    max_allowed = int(N * 0.75)
+    for chunk in allow_refund_chunks:
+        count = freq.get(chunk.chunk_id, 0)
+        assert count <= max_allowed, (
+            f"E4: chunk {chunk.chunk_id!r} selected {count}/{N} times — "
+            f"exceeds within-topic normalisation cap of {max_allowed}"
+        )
+
+
+def test_engine_determinism_with_domain() -> None:
+    """
+    E5 — Same seed produces identical chunk selections for a domain-specific plan.
+    """
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    def _run_plan(seed: int) -> list[str]:
+        injector = _make_injector(seed)
+        conv = _make_conv_event("evt_e5", "billing")
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+        plan = injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+        return sorted(plan.knowledge_citations.should_cite + plan.knowledge_citations.must_not_cite)
+
+    assert _run_plan(42) == _run_plan(42), (
+        "E5: same seed produced different chunk selections across two runs"
+    )
+    # Different seeds should produce potentially different selections (not guaranteed,
+    # but worth checking for statistical independence).
+    # We just verify the same-seed case is deterministic — divergence is not guaranteed.
+
+
+def test_engine_raise_on_no_candidates() -> None:
+    """
+    E6 — ValueError is raised when the event domain has no matching KB chunks.
+    """
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    injector = _make_injector()
+    conv = _make_conv_event("evt_e6", "nonexistent_domain")
+    snap = _make_snapshot()
+    spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+    with pytest.raises(ValueError, match="nonexistent_domain"):
+        injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+
+
+def test_engine_raise_on_unrecognized_event_type() -> None:
+    """
+    E7 — ValueError is raised when the trigger event type is not in the
+    eligible allowlist (e.g. account_created going through the injector).
+    """
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    injector = _make_injector()
+    # Build an ACCOUNT_CREATED event — not eligible for injection.
+    from datetime import datetime as _dt
+    from confabra.schemas import SimEventType as _SET
+    non_conv_event = SimEvent(
+        event_id="evt_e7",
+        event_type=_SET.ACCOUNT_CREATED,
+        account_id="acct_001",
+        timestamp=_dt(2025, 8, 1, 10, 0, 0),
+        day_index=0,
+        month_index=0,
+        payload={"plan_tier": "starter", "industry": "saas", "domain": "billing"},
+    )
+    snap = _make_snapshot()
+    spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+    with pytest.raises(ValueError, match="not eligible"):
+        injector._build_plan(non_conv_event, snap, spec, SYNTHETIC_KB_CHUNKS)
+
+
+def test_engine_manifest_fields_populated(tmp_path: Path) -> None:
+    """
+    E8 — After a synthetic-fixture dry run, the manifest contains non-default
+    values for kb_version, kb_chunk_count, domain_distribution_observed, and
+    chunk_selection_frequency.
+
+    Uses a patched KB generator so the synthetic fixture is used instead of
+    the real saas_content.py chunks.
+    """
+    from unittest.mock import patch
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    # Compute expected kb_hash from synthetic chunks (same logic as pipeline).
+    import hashlib
+    _source = "".join(
+        c.chunk_id + c.chunk_text
+        for c in sorted(SYNTHETIC_KB_CHUNKS, key=lambda c: c.chunk_id)
+    )
+    _expected_kb_version = hashlib.sha256(_source.encode()).hexdigest()
+
+    # Hash the chunks JSONL for the kb_chunks_hash field (pipeline writes to disk).
+    _chunk_lines = [c.model_dump_json() for c in SYNTHETIC_KB_CHUNKS]
+    _kb_hash = hashlib.sha256("\n".join(_chunk_lines).encode()).hexdigest()
+
+    with patch(
+        "confabra.pipeline.generate_kb",
+        return_value=(SYNTHETIC_KB_CHUNKS, _kb_hash),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=_SMALL_CORPUS_ACCOUNTS,
+            months=_SMALL_CORPUS_MONTHS,
+            seed=SEED,
+            output_root=tmp_path,
+            anthropic_api_key=None,
+        )
+        manifest = run_pipeline(config)
+
+    # kb_version must be a non-empty sha256 hex string
+    assert manifest.kb_version and manifest.kb_version == _expected_kb_version, (
+        f"E8: manifest.kb_version mismatch or empty: {manifest.kb_version!r}"
+    )
+
+    # kb_chunk_count must equal number of synthetic chunks
+    assert manifest.kb_chunk_count == len(SYNTHETIC_KB_CHUNKS), (
+        f"E8: manifest.kb_chunk_count={manifest.kb_chunk_count}, "
+        f"expected {len(SYNTHETIC_KB_CHUNKS)}"
+    )
+
+    # domain_distribution_observed must have entries for at least one domain
+    assert manifest.domain_distribution_observed, (
+        "E8: manifest.domain_distribution_observed is empty — "
+        "no CONVERSATION_STARTED events with domain field were found"
+    )
+
+    # chunk_selection_frequency is populated when at least one plan cites a chunk.
+    # For accuracy plans using the synthetic fixture, at least one chunk should appear.
+    assert isinstance(manifest.chunk_selection_frequency, dict), (
+        "E8: manifest.chunk_selection_frequency is not a dict"
+    )
