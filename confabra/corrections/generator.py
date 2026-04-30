@@ -33,6 +33,7 @@ from pathlib import Path
 
 from confabra.profiles.base import CorrectionPattern, Profile
 from confabra.schemas import AgentProfile, CorrectionRecord, NoiseClass, PatternClass
+from confabra.utils.atomic_write import atomic_write_text
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -449,9 +450,9 @@ def generate_corrections(
         lines.append(record.model_dump_json())
     content = "\n".join(lines) + ("\n" if lines else "")
 
-    # Write output file.
+    # Write output file atomically.
     output_path = output_dir / "corrections.jsonl"
-    output_path.write_text(content, encoding="utf-8")
+    atomic_write_text(output_path, content)
 
     # Compute SHA-256 hash over the written content.
     content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()

@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from confabra.profiles.base import Profile
+from confabra.utils.atomic_write import atomic_write_text, atomic_write_jsonl
 from confabra.schemas import (
     AgentProfile,
     CoachingEvent,
@@ -784,25 +785,14 @@ _ARCHETYPE_BUILDERS = {
 
 
 def _write_jsonl(path: Path, records: list[dict]) -> None:
-    """
-    Write *records* to *path* as newline-delimited JSON (JSONL).
-
-    Each record is serialised with ``json.dumps`` using ``default=str`` to
-    handle ``datetime`` objects that survive Pydantic's ``model_dump(mode="json")``
-    as ISO strings.  The file is created or overwritten atomically.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        for record in records:
-            f.write(json.dumps(record, default=str) + "\n")
+    """Write *records* to *path* as NDJSON using the atomic write utility."""
+    atomic_write_jsonl(path, (json.dumps(r, default=str) for r in records))
 
 
 def _write_profile_json(path: Path, profile_dict: dict) -> None:
-    """Write a single agent ``profile.json`` with 2-space indentation."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(profile_dict, f, indent=2, default=str)
-        f.write("\n")
+    """Write a single agent ``profile.json`` with 2-space indentation atomically."""
+    content = json.dumps(profile_dict, indent=2, default=str) + "\n"
+    atomic_write_text(path, content)
 
 
 # ---------------------------------------------------------------------------

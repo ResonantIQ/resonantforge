@@ -36,6 +36,7 @@ from confabra.layer1.quality_plan_injector import QualityPlanInjector
 from confabra.layer1.snapshot_emitter import SnapshotEmitter
 from confabra.layer1.state_machine import StateMachine
 from confabra.profiles import get_profile
+from confabra.utils.atomic_write import atomic_write_jsonl, atomic_write_text
 from confabra.schemas import (
     ConversationRecord,
     DaySnapshot,
@@ -648,8 +649,10 @@ def _run_pipeline_inner(
         kb_chunks = injector_cc.contaminate_kb_chunks(kb_chunks)
         # Re-write chunks.jsonl with the contaminated chunk list so that
         # tone_variant annotations are persisted to disk.
-        chunks_meta_path = profile_dir / "knowledge_base" / "chunks.jsonl"
-        _write_jsonl(chunks_meta_path, [chunk.model_dump_json() for chunk in kb_chunks])
+        atomic_write_jsonl(
+            profile_dir / "knowledge_base" / "chunks.jsonl",
+            [chunk.model_dump_json() for chunk in kb_chunks],
+        )
     else:
         _log(config, "  Skipping cross-contamination (fewer than 2 brand voice variants)")
 
@@ -761,32 +764,27 @@ def _run_pipeline_inner(
 
     # Serialise events.
     event_lines = [e.model_dump_json() for e in events]
-    events_path = profile_dir / "events.jsonl"
-    _write_jsonl(events_path, event_lines)
     events_hash = _sha256_jsonl(event_lines)
+    atomic_write_jsonl(profile_dir / "events.jsonl", event_lines)
 
     # Serialise snapshots.
     snapshot_lines = [s.model_dump_json() for s in snapshots]
-    snapshots_path = profile_dir / "snapshots.jsonl"
-    _write_jsonl(snapshots_path, snapshot_lines)
     snapshots_hash = _sha256_jsonl(snapshot_lines)
+    atomic_write_jsonl(profile_dir / "snapshots.jsonl", snapshot_lines)
 
     # Serialise conversations.
     conv_lines = [c.model_dump_json() for c in all_conversations]
-    convs_path = profile_dir / "conversations.jsonl"
-    _write_jsonl(convs_path, conv_lines)
     conversations_hash = _sha256_jsonl(conv_lines)
+    atomic_write_jsonl(profile_dir / "conversations.jsonl", conv_lines)
 
     # Serialise quality plans.
     plan_lines = [p.model_dump_json() for p in quality_plans]
-    plans_path = profile_dir / "planted_quality.jsonl"
-    _write_jsonl(plans_path, plan_lines)
     planted_quality_hash = _sha256_jsonl(plan_lines)
+    atomic_write_jsonl(profile_dir / "planted_quality.jsonl", plan_lines)
 
     # Serialise skipped conversation IDs.
     skipped_lines = [json.dumps({"conversation_id": cid}) for cid in skipped_conv_ids]
-    skipped_path = profile_dir / "skipped_conversations.jsonl"
-    _write_jsonl(skipped_path, skipped_lines)
+    atomic_write_jsonl(profile_dir / "skipped_conversations.jsonl", skipped_lines)
 
     # Build manifest.
     manifest = Manifest(
@@ -820,10 +818,7 @@ def _run_pipeline_inner(
     )
 
     manifest_path = profile_dir / "manifest.json"
-    manifest_path.write_text(
-        json.dumps(manifest.model_dump(mode="json"), indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_text(manifest_path, json.dumps(manifest.model_dump(mode="json"), indent=2))
 
     _log(config, f"  manifest written → {manifest_path}")
     _log(
