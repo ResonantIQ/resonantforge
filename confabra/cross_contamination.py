@@ -11,7 +11,7 @@ cannot be solved by a model that memorises surface-level tone patterns.
 Design principles
 -----------------
 - **Metadata-only** — chunk/row/conversation *content* is never rewritten.
-  ``tone_variant`` and ``tone_contamination_marker`` are annotation fields that
+  ``tone_variant`` and ``tone_variant`` are annotation fields that
   describe what voice the artifact was *written in*, for use by the evaluation
   harness.  The prose generator does not read them.
 - **Deterministic** — all randomness flows through a single ``random.Random``
@@ -146,10 +146,10 @@ class CrossContaminationInjector:
         self, rows: Sequence[TrajectoryRow]
     ) -> list[TrajectoryRow]:
         """
-        Mark ~25% of agent trajectory rows with a non-dominant ``tone_contamination_marker``.
+        Mark ~25% of agent trajectory rows with a non-dominant ``tone_variant``.
 
         Returns a new list; the input sequence is not mutated.  Each item that
-        is *not* contaminated retains ``tone_contamination_marker=None``.
+        is *not* contaminated retains ``tone_variant=None``.
 
         Parameters
         ----------
@@ -166,10 +166,10 @@ class CrossContaminationInjector:
         for row in rows:
             if self._should_contaminate(self.TRAJECTORY_CONTAMINATION_RATE):
                 contaminated = row.model_copy(
-                    update={"tone_contamination_marker": self._pick_alternative()}
+                    update={"tone_variant": self._pick_alternative()}
                 )
             else:
-                contaminated = row.model_copy(update={"tone_contamination_marker": None})
+                contaminated = row.model_copy(update={"tone_variant": None})
             result.append(contaminated)
         return result
 
@@ -177,10 +177,10 @@ class CrossContaminationInjector:
         self, convs: Sequence[ConversationRecord]
     ) -> list[ConversationRecord]:
         """
-        Mark ~15% of organic conversation records with a non-dominant ``tone_contamination_marker``.
+        Mark ~15% of organic conversation records with a non-dominant ``tone_variant``.
 
         Returns a new list; the input sequence is not mutated.  Each item that
-        is *not* contaminated retains ``tone_contamination_marker=None``.
+        is *not* contaminated retains ``tone_variant=None``.
 
         Parameters
         ----------
@@ -197,9 +197,9 @@ class CrossContaminationInjector:
         for conv in convs:
             if self._should_contaminate(self.CONVERSATION_CONTAMINATION_RATE):
                 contaminated = conv.model_copy(
-                    update={"tone_contamination_marker": self._pick_alternative()}
+                    update={"tone_variant": self._pick_alternative()}
                 )
             else:
-                contaminated = conv.model_copy(update={"tone_contamination_marker": None})
+                contaminated = conv.model_copy(update={"tone_variant": None})
             result.append(contaminated)
         return result

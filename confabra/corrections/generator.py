@@ -405,7 +405,7 @@ def generate_corrections(
     for idx, (pattern, rationale_noise, ts) in enumerate(
         zip(expanded, rationale_noise_choices, timestamps)
     ):
-        correction_id = f"corr_{idx + 1:03d}"
+        correction_id = f"corr_{idx + 1:06d}"
 
         pattern_class_enum = _PATTERN_CLASS_MAP.get(
             pattern.pattern_class, PatternClass.CROSS_CRITERION_NOISE

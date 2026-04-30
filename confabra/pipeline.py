@@ -277,7 +277,7 @@ def _make_conversation_record(
         prose=prose,
         trigger_event_id=conv_event.event_id,
         is_planted_quality=quality_plan is not None,
-        tone_contamination_marker=None,
+        tone_variant=None,
     )
 
 
@@ -808,7 +808,7 @@ def _run_pipeline_inner(
         snapshots_hash=snapshots_hash,
         conversations_hash=conversations_hash,
         planted_quality_hash=planted_quality_hash,
-        knowledge_base_hash=kb_hash,
+        kb_chunks_hash=kb_hash,
         tenant_config_hash=tenant_config_hash,
         agent_fixtures_hash=agents_hash,
         corrections_hash=corrections_hash,

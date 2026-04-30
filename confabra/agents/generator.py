@@ -310,7 +310,7 @@ def _build_improving(
             scored_at=_ts(day, rng.randint(8, 17)),
             coaching_phase="pre_coaching",
             post_coaching_of=None,
-            tone_contamination_marker=None,
+            tone_variant=None,
         )
         traj_rows.append(row.model_dump(mode="json"))
         traj_counter[0] += 1
@@ -344,7 +344,7 @@ def _build_improving(
             scored_at=_ts(day, rng.randint(8, 17)),
             coaching_phase="post_coaching",
             post_coaching_of=c1_id,
-            tone_contamination_marker=None,
+            tone_variant=None,
         )
         traj_rows.append(row.model_dump(mode="json"))
         traj_counter[0] += 1
@@ -378,7 +378,7 @@ def _build_improving(
             scored_at=_ts(day, rng.randint(8, 17)),
             coaching_phase="post_coaching",
             post_coaching_of=c2_id,
-            tone_contamination_marker=None,
+            tone_variant=None,
         )
         traj_rows.append(row.model_dump(mode="json"))
         traj_counter[0] += 1
@@ -458,7 +458,7 @@ def _build_recurring_weakness(
                 scored_at=_ts(day, rng.randint(8, 17)),
                 coaching_phase=phase_label,
                 post_coaching_of=post_of,
-                tone_contamination_marker=None,
+                tone_variant=None,
             )
             traj_rows.append(row.model_dump(mode="json"))
             traj_counter[0] += 1
@@ -537,7 +537,7 @@ def _build_new_no_history(
             scored_at=_ts(day, rng.randint(8, 17)),
             coaching_phase="uncoached",
             post_coaching_of=None,
-            tone_contamination_marker=None,
+            tone_variant=None,
         )
         traj_rows.append(row.model_dump(mode="json"))
         traj_counter[0] += 1
@@ -604,7 +604,7 @@ def _build_mixed_history(
             scored_at=_ts(day, rng.randint(8, 17)),
             coaching_phase="pre_coaching",
             post_coaching_of=None,
-            tone_contamination_marker=None,
+            tone_variant=None,
         )
         traj_rows.append(row.model_dump(mode="json"))
         traj_counter[0] += 1
@@ -635,7 +635,7 @@ def _build_mixed_history(
             scored_at=_ts(day, rng.randint(8, 17)),
             coaching_phase="post_coaching",
             post_coaching_of=c_a1_id,
-            tone_contamination_marker=None,
+            tone_variant=None,
         )
         traj_rows.append(row.model_dump(mode="json"))
         traj_counter[0] += 1
@@ -666,7 +666,7 @@ def _build_mixed_history(
             scored_at=_ts(day, rng.randint(8, 17)),
             coaching_phase="post_coaching",
             post_coaching_of=c_a2_id,
-            tone_contamination_marker=None,
+            tone_variant=None,
         )
         traj_rows.append(row.model_dump(mode="json"))
         traj_counter[0] += 1
@@ -703,7 +703,7 @@ def _build_mixed_history(
                 scored_at=_ts(day, rng.randint(8, 17)),
                 coaching_phase=p_label,
                 post_coaching_of=post_of,
-                tone_contamination_marker=None,
+                tone_variant=None,
             )
             traj_rows.append(row.model_dump(mode="json"))
             traj_counter[0] += 1
@@ -740,7 +740,7 @@ def _build_mixed_history(
             scored_at=_ts(day, rng.randint(8, 17)),
             coaching_phase="uncoached",
             post_coaching_of=None,
-            tone_contamination_marker=None,
+            tone_variant=None,
         )
         traj_rows.append(row.model_dump(mode="json"))
         traj_counter[0] += 1

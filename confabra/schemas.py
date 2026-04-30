@@ -133,7 +133,7 @@ class ConversationRecord(BaseModel):
     prose: str  # full generated conversation text
     trigger_event_id: str
     is_planted_quality: bool = False
-    tone_contamination_marker: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
+    tone_variant: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
 
 
 class AccuracyLabel(BaseModel):
@@ -522,7 +522,7 @@ class TrajectoryRow(BaseModel):
     scored_at: datetime
     coaching_phase: Literal["pre_coaching", "post_coaching", "uncoached"]
     post_coaching_of: Optional[str] = None  # coaching_id reference
-    tone_contamination_marker: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
+    tone_variant: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
 
     @field_validator("ai_score")
     @classmethod
@@ -645,7 +645,7 @@ class Manifest(BaseModel):
     snapshots_hash: str
     conversations_hash: str
     planted_quality_hash: str
-    knowledge_base_hash: str
+    kb_chunks_hash: str
     tenant_config_hash: str
     agent_fixtures_hash: str
     corrections_hash: str

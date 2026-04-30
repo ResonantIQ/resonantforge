@@ -464,7 +464,7 @@ def stats(corpus_dir: Path, profile: str) -> None:
         ("snapshots_hash", "Snapshots"),
         ("conversations_hash", "Conversations"),
         ("planted_quality_hash", "Planted quality"),
-        ("knowledge_base_hash", "Knowledge base"),
+        ("kb_chunks_hash", "Knowledge base chunks"),
         ("tenant_config_hash", "Tenant config"),
         ("agent_fixtures_hash", "Agent fixtures"),
         ("corrections_hash", "Corrections"),
