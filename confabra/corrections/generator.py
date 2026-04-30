@@ -62,7 +62,9 @@ _OFF_TOPIC_RATIONALE_TEMPLATES: dict[str, str] = {
 }
 
 # Probability thresholds for noise injection.
-_P_TERSE_RATIONALE = 0.30          # 30% of all records get a terse rationale
+# Sequential check: roll < OFF_TOPIC → off_topic; roll < TERSE_CEILING → terse.
+# Terse window = [0.10, 0.40) = ~30%; off_topic window = [0, 0.10) = ~10%.
+_P_TERSE_RATIONALE = 0.40          # ceiling: combined off_topic + terse band
 _P_OFF_TOPIC_RATIONALE = 0.10      # 10% of all records get an off-topic rationale
 _P_CONTRADICTORY = 0.15            # 15% of systematic_upward records are contradictory
 
