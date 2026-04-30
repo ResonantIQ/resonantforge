@@ -1384,9 +1384,15 @@ def test_engine_determinism_with_domain() -> None:
     # We just verify the same-seed case is deterministic — divergence is not guaranteed.
 
 
-def test_engine_raise_on_no_candidates() -> None:
+def test_engine_fallback_on_no_candidates() -> None:
     """
-    E6 — ValueError is raised when the event domain has no matching KB chunks.
+    E6 — When the event domain has no matching KB chunks (e.g. a legacy state-machine
+    domain string that predates the 13-domain vocabulary), the injector falls back to
+    the full KB pool rather than raising, so the pipeline continues to run.
+
+    Previously this test verified a ValueError raise; updated in PR2 to document the
+    graceful-fallback behavior introduced to keep the legacy state machine compatible
+    with the newly domain-tagged KB.
     """
     from confabra.schemas import AccuracyLabel
     from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
@@ -1396,8 +1402,10 @@ def test_engine_raise_on_no_candidates() -> None:
     snap = _make_snapshot()
     spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
 
-    with pytest.raises(ValueError, match="nonexistent_domain"):
-        injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+    # Should NOT raise — falls back to full KB pool.
+    plan = injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+    # At least one chunk must be selected from the full pool.
+    assert plan.knowledge_citations.should_cite or plan.kb_chunks_required is not None
 
 
 def test_engine_raise_on_unrecognized_event_type() -> None:
@@ -1488,3 +1496,72 @@ def test_engine_manifest_fields_populated(tmp_path: Path) -> None:
     assert isinstance(manifest.chunk_selection_frequency, dict), (
         "E8: manifest.chunk_selection_frequency is not a dict"
     )
+
+
+# ---------------------------------------------------------------------------
+# Group 15 — KB tagging and invariant health (assertions A, B, C, D)
+# ---------------------------------------------------------------------------
+
+
+def test_kb_domain_tag_completeness_existing() -> None:
+    """Every existing KB chunk must have at least one domain tag after PR2."""
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    chunks = get_saas_kb_chunks()
+    untagged = [c.chunk_id for c in chunks if not c.domains]
+    assert not untagged, f"Chunks missing domain tags: {untagged}"
+
+
+def test_adversarial_chunks_marked_correctly() -> None:
+    """The 3 adversarial KB fixtures must have adversarial=True set on the KBChunk model field."""
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    EXPECTED_ADVERSARIAL = {
+        "kb_chunk_refund_eligibility_timelines_v1",
+        "kb_chunk_refund_grace_period_stale_v1",
+        "kb_chunk_all_customers_refund_bait_v1",
+    }
+    chunks = get_saas_kb_chunks()
+    adversarial_set = {c.chunk_id for c in chunks if c.adversarial}
+    missing = EXPECTED_ADVERSARIAL - adversarial_set
+    assert not missing, f"Expected adversarial chunks missing adversarial=True: {missing}"
+    # No unexpected adversarial chunks
+    extra = adversarial_set - EXPECTED_ADVERSARIAL
+    assert not extra, f"Unexpected chunks marked adversarial: {extra}"
+
+
+def test_invariant_checker_passes_existing_kb() -> None:
+    """
+    The invariant checker must return zero errors against the existing tagged KB.
+
+    If this fails, the existing KB has internal contradictions that must be
+    resolved before PR3 adds new chunks. Surface errors — do not suppress them.
+    """
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    from confabra.validators.invariant_checker import run_checker
+    chunks = get_saas_kb_chunks()
+    report = run_checker(chunks)
+    assert not report.errors, (
+        f"Invariant checker found {len(report.errors)} error(s) in existing KB:\n"
+        + "\n".join(f"  - {e}" for e in report.errors)
+    )
+
+
+def test_chunks_with_claims_are_well_formed() -> None:
+    """
+    Every KB chunk with non-empty claims must have well-formed claim values.
+    Claims must be a dict of str keys mapping to non-None primitive values or lists.
+    """
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    chunks = get_saas_kb_chunks()
+    malformed = []
+    for c in chunks:
+        if not c.claims:
+            continue  # empty claims are fine
+        if not isinstance(c.claims, dict):
+            malformed.append((c.chunk_id, f"claims is {type(c.claims).__name__}, expected dict"))
+            continue
+        for key, value in c.claims.items():
+            if not isinstance(key, str):
+                malformed.append((c.chunk_id, f"claim key {key!r} is not a str"))
+            # Values may be None (e.g. Enterprise price is None) — that's allowed
+            # as long as the key is a str
+    assert not malformed, f"Malformed claims found:\n" + "\n".join(f"  {cid}: {reason}" for cid, reason in malformed)

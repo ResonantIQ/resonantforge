@@ -365,11 +365,10 @@ class QualityPlanInjector:
                 )
             domain_candidates = [c for c in kb_chunks if domain in c.domains]
             if not domain_candidates:
-                raise ValueError(
-                    f"No KB chunks found for domain '{domain}' "
-                    f"(event {conv_event.event_id}).  "
-                    f"State machine emitted a domain with no KB coverage."
-                )
+                # Legacy state machine emits domain strings ('api', 'billing', 'refunds')
+                # that predate the 13-domain vocabulary. Fall back to the full KB pool
+                # until PR3 updates the state machine to emit vocabulary-aligned strings.
+                domain_candidates = list(kb_chunks)
 
             # Split into allow pool (non-adversarial) and deny pool.
             # DENY_CONDITION chunks are always deny-pool regardless of adversarial flag.

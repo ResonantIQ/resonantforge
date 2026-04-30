@@ -259,6 +259,7 @@ class KBChunk(BaseModel):
     tone_variant: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
     domains: list[str] = Field(default_factory=list)  # topic domains this chunk covers
     adversarial: bool = False  # opt-in required to include in should_cite
+    claims: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
