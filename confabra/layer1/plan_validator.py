@@ -50,6 +50,10 @@ class SkipRateTracker:
     disagreement_cases: int = 0
     # Total skipped conversations
     total_skipped: int = 0
+    # Cache telemetry (Anthropic ephemeral prompt caching)
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_api_calls: int = 0
 
     @property
     def prose_fact_rate(self) -> float:

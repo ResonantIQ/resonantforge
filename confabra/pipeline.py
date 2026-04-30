@@ -204,13 +204,15 @@ def _call_anthropic(
     api_key: str,
     system_prompt: str,
     user_prompt: str,
-) -> str:
+) -> tuple[str, int, int]:
     """
-    Call the Anthropic API and return the generated conversation text.
+    Call the Anthropic API and return the generated text plus cache usage counters.
 
     Uses claude-haiku-4-5-20251001 with a conservative max_tokens to keep costs
-    reasonable during corpus generation runs.  Raises on API errors — the caller
-    handles retries.
+    reasonable during corpus generation runs.  The system prompt is wrapped with
+    an ephemeral cache_control block — the prefix is byte-stable within a run
+    (only profile_name varies, and that is constant per pipeline execution).
+    Raises on API errors — the caller handles retries.
 
     Args:
         api_key:       Anthropic API key.
@@ -218,7 +220,9 @@ def _call_anthropic(
         user_prompt:   User prompt carrying account/chunk context.
 
     Returns:
-        The raw text content from the first text block in the response.
+        Tuple of (prose_text, cache_creation_input_tokens, cache_read_input_tokens).
+        Token counts are 0 when not reported by the API (e.g. first call in a run
+        writes the cache, subsequent calls read it).
     """
     if not ANTHROPIC_AVAILABLE:
         raise RuntimeError(
@@ -228,14 +232,22 @@ def _call_anthropic(
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,
-        system=system_prompt,
+        system=[
+            {
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
         messages=[{"role": "user", "content": user_prompt}],
     )
+    cache_creation = getattr(response.usage, "cache_creation_input_tokens", 0) or 0
+    cache_read = getattr(response.usage, "cache_read_input_tokens", 0) or 0
     # Extract text from the first content block.
     for block in response.content:
         if hasattr(block, "text"):
-            return block.text
-    return "[NO CONTENT]"
+            return block.text, cache_creation, cache_read
+    return "[NO CONTENT]", cache_creation, cache_read
 
 
 def _make_conversation_record(
@@ -515,10 +527,17 @@ def _generate_prose_for_chunk(
             )
         else:
             try:
-                prose = _call_anthropic(
+                prose, cache_creation, cache_read = _call_anthropic(
                     api_key=config.anthropic_api_key,
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
+                )
+                skip_tracker.cache_api_calls += 1
+                skip_tracker.cache_creation_tokens += cache_creation
+                skip_tracker.cache_read_tokens += cache_read
+                _log(
+                    config,
+                    f"  cache {conv_id}: creation={cache_creation} read={cache_read}",
                 )
             except Exception as exc:  # noqa: BLE001
                 _log(config, f"  API error on attempt {attempt}: {exc}")
@@ -732,6 +751,23 @@ def _run_pipeline_inner(
         f"{len(skipped_conv_ids)} skipped",
     )
 
+    # Emit cache telemetry summary for the prose generation phase.
+    _total_creation = skip_tracker.cache_creation_tokens
+    _total_read = skip_tracker.cache_read_tokens
+    _total_calls = skip_tracker.cache_api_calls
+    _cacheable = _total_creation + _total_read
+    _hit_rate = _total_read / max(1, _cacheable)
+    # Haiku input tokens cost $0.25/M uncached; cached reads are $0.03/M (88% cheaper).
+    _saved_tokens = _total_read
+    _estimated_savings_usd = _saved_tokens * (0.25 - 0.03) / 1_000_000
+    _cache_summary = (
+        f"  cache summary: calls={_total_calls} "
+        f"creation={_total_creation} read={_total_read} "
+        f"hit_rate={_hit_rate:.1%} "
+        f"estimated_savings=${_estimated_savings_usd:.4f}"
+    )
+    print(f"[confabra] {_cache_summary}")
+
     # Apply cross-contamination to organic conversations.
     if len(bv_variants) >= 2:
         all_conversations = injector_cc.contaminate_conversations(all_conversations)
@@ -815,6 +851,10 @@ def _run_pipeline_inner(
         prose_fact_violation_rate=skip_tracker.prose_fact_rate,
         validator_rule_failure_rate=skip_tracker.quality_rule_rate,
         disagreement_rate=skip_tracker.disagreement_rate,
+        cache_creation_tokens=skip_tracker.cache_creation_tokens,
+        cache_read_tokens=skip_tracker.cache_read_tokens,
+        cache_hit_rate=_hit_rate,
+        cache_estimated_savings_usd=_estimated_savings_usd,
     )
 
     manifest_path = profile_dir / "manifest.json"

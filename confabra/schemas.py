@@ -653,6 +653,11 @@ class Manifest(BaseModel):
     prose_fact_violation_rate: float
     validator_rule_failure_rate: float
     disagreement_rate: float
+    # Prompt cache telemetry (Anthropic ephemeral caching)
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_hit_rate: float = 0.0
+    cache_estimated_savings_usd: float = 0.0
 
 
 # ---------------------------------------------------------------------------
