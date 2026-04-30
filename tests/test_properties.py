@@ -553,7 +553,6 @@ def test_corrections_noise_distribution(corpus: tuple[Path, Manifest]) -> None:
 
     _RATIONALE_MESSY = {
         NoiseClass.TERSE_RATIONALE.value,
-        "off_topic_rationale",          # alias used in some internal logic
         NoiseClass.NON_EXPLAINING_RATIONALE.value,
     }
 
