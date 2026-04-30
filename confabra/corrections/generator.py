@@ -209,7 +209,8 @@ def _generate_ai_score(
     if pattern_class == PatternClass.SYSTEMATIC_UPWARD:
         if is_contradictory:
             # AI was actually right — scores should be close or AI above human.
-            delta = rng.randint(5, 12)
+            # Capped at 7 (not 12) to prevent too many records pinning at _AI_SCORE_MAX.
+            delta = rng.randint(3, 7)
             base_ai = human_score + delta
         else:
             # AI consistently under-scores relative to human (upward direction).
