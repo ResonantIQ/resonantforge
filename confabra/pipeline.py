@@ -31,6 +31,7 @@ from confabra.agents.generator import generate_agents
 from confabra.corrections.generator import generate_corrections
 from confabra.cross_contamination import CrossContaminationInjector
 from confabra.kb.generator import generate_kb
+from confabra.layer1.coverage_backfill import CoverageBackfill
 from confabra.layer1.plan_validator import PlanValidator, SkipRateTracker
 from confabra.layer1.quality_plan_injector import QualityPlanInjector
 from confabra.layer1.snapshot_emitter import SnapshotEmitter
@@ -967,12 +968,41 @@ def _run_pipeline_inner(
     # before quality plan injection) can write its subdirectory.
     profile_dir.mkdir(parents=True, exist_ok=True)
 
+    # 1a. Build coverage backfill from the profile's KB chunks.
+    # We call profile.knowledge_base_content() directly (not generate_kb) so
+    # we can derive authored cells before the state machine runs — generate_kb
+    # writes to disk but the chunk objects are identical to what the profile
+    # already owns.  Any profile that returns [] here gets no backfill (which
+    # is safe — the state machine falls back to pure weighted-random).
+    _kb_chunks_for_cells = getattr(profile, "knowledge_base_content", lambda: [])()
+    _authored_cells: list[tuple[str, str]] = []
+    _seen_cells: set[tuple[str, str]] = set()
+    for _chunk in _kb_chunks_for_cells:
+        _gate = getattr(_chunk, "cat11_gate", None)
+        if not _gate:
+            continue
+        for _dom in getattr(_chunk, "domains", []):
+            _cell = (_dom, _gate)
+            if _cell not in _seen_cells:
+                _authored_cells.append(_cell)
+                _seen_cells.add(_cell)
+
+    _cell_min_overrides: dict[tuple[str, str], int] = getattr(
+        profile, "cell_min_events_overrides", lambda: {}
+    )()
+    backfill = CoverageBackfill(
+        cells=_authored_cells,
+        min_events_override=_cell_min_overrides if _cell_min_overrides else None,
+    )
+    _log(config, f"  {len(_authored_cells)} authored (domain×gate) cells registered for backfill")
+
     # 1b. Run state machine — returns (events, snapshots).
     sm = StateMachine(
         seed=config.seed,
         num_accounts=config.accounts,
         num_months=config.months,
         profile=profile,
+        backfill=backfill,
     )
     events, snapshots = sm.simulate()
     _log(config, f"  {len(events)} events, {len(snapshots)} snapshots")
@@ -1318,6 +1348,10 @@ def _run_pipeline_inner(
         kb_chunk_count=kb_chunk_count,
         domain_distribution_observed=_domain_dist,
         chunk_selection_frequency=_chunk_freq,
+        backfill_activations=backfill.get_backfill_activations(),
+        cells_requiring_backfill=backfill.get_cells_requiring_backfill(),
+        cells_satisfied_by_normal=backfill.get_cells_satisfied_by_normal(),
+        deficit_at_run_end=backfill.get_deficit_at_run_end(),
     )
 
     manifest_path = profile_dir / "manifest.json"

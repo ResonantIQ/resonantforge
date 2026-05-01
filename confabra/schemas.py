@@ -736,6 +736,11 @@ class Manifest(BaseModel):
     kb_chunk_count: int = 0  # mirrors knowledge_base_chunk_count; kept for API symmetry
     domain_distribution_observed: dict[str, int] = Field(default_factory=dict)
     chunk_selection_frequency: dict[str, int] = Field(default_factory=dict)
+    # PR3b: coverage backfill telemetry — populated when a CoverageBackfill is wired in
+    backfill_activations: list[dict[str, Any]] = Field(default_factory=list)
+    cells_requiring_backfill: list[str] = Field(default_factory=list)
+    cells_satisfied_by_normal: list[str] = Field(default_factory=list)
+    deficit_at_run_end: dict[str, int] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

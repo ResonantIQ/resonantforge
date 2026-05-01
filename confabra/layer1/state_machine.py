@@ -1,9 +1,11 @@
 """Deterministic account lifecycle state machine."""
 
+from __future__ import annotations
+
 import random
 from datetime import datetime, date, timedelta
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from confabra.schemas import (
     SimEvent,
@@ -14,6 +16,9 @@ from confabra.schemas import (
 )
 from confabra.layer1.sim_events import validate_event_payload
 from confabra.layer1.clocks import ClockRegistry
+
+if TYPE_CHECKING:
+    from confabra.layer1.coverage_backfill import CoverageBackfill
 
 # ---------------------------------------------------------------------------
 # Industry fallback list (kept for backward-compat with duck-typed FakeProfile
@@ -109,6 +114,7 @@ class StateMachine:
         num_accounts: int,
         num_months: int,
         profile: "Profile",
+        backfill: "CoverageBackfill | None" = None,
     ):
         """
         Initialise the state machine.
@@ -118,6 +124,11 @@ class StateMachine:
             num_accounts: Number of synthetic accounts to generate and simulate.
             num_months: Number of simulated months (each treated as 30 days).
             profile: Layer 2 profile object (duck-typed; see ``Profile`` protocol).
+            backfill: Optional coverage backfill layer (PR3b).  When provided,
+                the backfill intercepts domain selection and forces rare cells
+                into the event stream until every cell reaches its ``min_events``
+                quota.  Pass ``None`` (the default) for pure weighted-random
+                behaviour identical to the pre-PR3b state machine.
         """
         self.rng = random.Random(seed)
         self.seed = seed
@@ -144,6 +155,9 @@ class StateMachine:
         self._domain_intents: dict[str, list[str]] = getattr(
             profile, "domain_intents", lambda: {}
         )()
+
+        # PR3b: optional coverage backfill (None → pure weighted-random).
+        self._backfill: "CoverageBackfill | None" = backfill
 
     # ------------------------------------------------------------------
     # ID helpers
@@ -314,11 +328,36 @@ class StateMachine:
                     agent = self.rng.choice(active_agents_today)
                     # Reserve the conv_id before emitting any events for it
                     conv_id = f"conv_{self._event_counter + 1:05d}"
-                    _domain = self.rng.choices(self._domain_names, weights=self._domain_w, k=1)[0]
+
+                    # PR3b: domain selection — backfill intercepts when cells are
+                    # in deficit; otherwise falls through to weighted-random.
+                    if self._backfill is not None:
+                        _domain, _gate_hint = self._backfill.select(
+                            self.rng, self._domain_names, self._domain_w
+                        )
+                    else:
+                        _domain = self.rng.choices(
+                            self._domain_names, weights=self._domain_w, k=1
+                        )[0]
+                        _gate_hint = None
+
                     _intent_pool = self._domain_intents.get(_domain, [])
                     _intent = (
                         [self.rng.choice(_intent_pool)] if _intent_pool else []
                     )
+
+                    # Build payload; include backfill hint when present so
+                    # downstream (e.g. quality plan injector) can inspect it.
+                    _payload: dict = {
+                        "surface_channel": "intercom",
+                        "agent_id": agent,
+                        "customer_name": f"Customer_{account.account_id}",
+                        "domain": _domain,
+                        "intent": _intent,
+                    }
+                    if _gate_hint is not None:
+                        _payload["backfill_target_gate"] = _gate_hint
+
                     self._emit_event(
                         event_type=SimEventType.CONVERSATION_STARTED,
                         account_id=account.account_id,
@@ -327,14 +366,12 @@ class StateMachine:
                         event_date=current_date,
                         day_index=global_day,
                         month_index=month_idx,
-                        payload={
-                            "surface_channel": "intercom",
-                            "agent_id": agent,
-                            "customer_name": f"Customer_{account.account_id}",
-                            "domain": _domain,
-                            "intent": _intent,
-                        },
+                        payload=_payload,
                     )
+
+                    # PR3b: record the event so the backfill can update deficits.
+                    if self._backfill is not None:
+                        self._backfill.record_event(_domain, _gate_hint)
                     duration = self.rng.randint(5, 45)
                     turns = self.rng.randint(3, 15)
                     resolution = self.rng.choice(["resolved", "escalated", "pending"])
