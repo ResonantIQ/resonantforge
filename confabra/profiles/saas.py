@@ -8,6 +8,29 @@ from confabra.schemas import BrandVoiceVariant, CoachingStyleOverlay, KBChunk
 from confabra.profiles.lexicons import saas as saas_lex
 from confabra.kb.saas_content import get_saas_kb_chunks
 
+# Canonical plan-tier names for this profile. Detectors, validators, and the
+# invariant checker all import from here — never hardcode tier names elsewhere.
+CANONICAL_TIER_NAMES: frozenset[str] = frozenset({"Starter", "Growth", "Enterprise"})
+
+# Canonical domain identifiers for SaaS conversations. Downstream chunk
+# authors (PR4-PR7), the invariant checker, and any coverage analysis must
+# reference this tuple rather than hardcoding domain strings.
+CANONICAL_DOMAIN_NAMES: tuple[str, ...] = (
+    "billing_and_invoicing",
+    "subscription_management",
+    "refund_policy",
+    "cancellation",
+    "account_access",
+    "onboarding_and_setup",
+    "how_to_usage",
+    "technical_issue",
+    "feature_request",
+    "integrations",
+    "api_and_webhooks",
+    "data_management",
+    "sla_credits",
+)
+
 
 class SaaSProfile(Profile):
     """
@@ -340,6 +363,59 @@ class SaaSProfile(Profile):
 
     def synonym_map(self) -> dict[str, str]:
         return saas_lex.SYNONYM_MAP
+
+    def domain_weights(self) -> dict[str, int]:
+        """
+        Sampling weights for all 13 SaaS support domains.
+
+        Weights are positive integers; relative magnitudes set the probability.
+        technical_issue (18), how_to_usage (13), and feature_request (8) are
+        anchored by the KB completion plan's per-domain authored depth. Remaining
+        weights reflect a realistic B2B SaaS support conversation mix.
+
+        All 13 domains must be present. Any change to weights or domain names
+        requires a parallel update to CANONICAL_DOMAIN_NAMES above.
+        """
+        return {
+            "billing_and_invoicing": 9,
+            "subscription_management": 9,
+            "refund_policy": 7,
+            "cancellation": 6,
+            "account_access": 8,
+            "onboarding_and_setup": 8,
+            "how_to_usage": 13,
+            "technical_issue": 18,
+            "feature_request": 8,
+            "integrations": 5,
+            "api_and_webhooks": 5,
+            "data_management": 3,
+            "sla_credits": 1,
+        }
+
+    def domain_intents(self) -> dict[str, list[str]]:
+        """
+        Per-domain intent vocabularies for conversation annotation.
+
+        Covers all intent values that PR4-PR7 chunk authoring will reference.
+        The state machine selects one intent per conversation from the domain's
+        list. Assignments are 1:1 or 1:2 per domain to allow minor variation
+        within each domain's conversation shape.
+        """
+        return {
+            "billing_and_invoicing": ["billing_inquiry"],
+            "subscription_management": ["subscription_upgrade", "subscription_downgrade"],
+            "refund_policy": ["refund_request"],
+            "cancellation": ["cancellation_request"],
+            "account_access": ["account_access_issue"],
+            "onboarding_and_setup": ["onboarding_help"],
+            "how_to_usage": ["how_to_question"],
+            "technical_issue": ["bug_report"],
+            "feature_request": ["feature_request_submission"],
+            "integrations": ["integration_setup"],
+            "api_and_webhooks": ["api_usage_question", "webhook_configuration"],
+            "data_management": ["data_export_request"],
+            "sla_credits": ["sla_credit_inquiry"],
+        }
 
     def planted_quality_count(self) -> int:
         """SaaS plants 50 quality conversations to exercise full Cat coverage."""

@@ -275,3 +275,27 @@ class Profile(ABC):
     def default_months(self) -> int:
         """Default simulation duration in months for this profile."""
         return 6
+
+    def domain_weights(self) -> dict[str, int]:
+        """
+        Per-domain sampling weights for state machine conversation assignment.
+
+        Keys are domain identifier strings; values are positive integers whose
+        relative magnitudes determine sampling probability. An empty dict means
+        the state machine falls back to its built-in default list (legacy behavior
+        for duck-typed test profiles that predate this method).
+
+        SaaS and PS profiles override this; test FakeProfile stubs need not.
+        """
+        return {}
+
+    def domain_intents(self) -> dict[str, list[str]]:
+        """
+        Per-domain intent vocabularies for conversation annotation.
+
+        Maps each domain identifier to the list of valid intent strings for
+        conversations in that domain. The state machine picks one intent per
+        conversation from the domain's list. An empty dict produces intent=[]
+        on all events (legacy behavior).
+        """
+        return {}

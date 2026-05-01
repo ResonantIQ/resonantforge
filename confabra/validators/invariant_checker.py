@@ -1,22 +1,79 @@
 """
 Deterministic invariant checker for the SaaS KB.
 
-Aggregates structured claims across KB chunks and detects contradictions
-between them. Source tracking: every error names the chunk_id(s) involved.
+NOTE: The invariant checker operates strictly at the single-chunk level, with the
+sole exception of controlled-vocabulary checks. Cross-chunk claim comparison is
+intentionally NOT supported. Forge KB chunks are test fixtures, and chunks tagged
+to different gates may legitimately contradict each other on numeric claims, time
+windows, conditional thresholds, and similar test material. See
+docs/resonantforge/saas-invariants.md for the design rationale.
 
-No NLP, no LLM, no embeddings — pure structured claim aggregation.
+Two named concerns:
+  validate_chunk_structure(chunk)  — per-chunk structural rules
+  validate_controlled_vocab(chunk) — per-chunk controlled-vocabulary rules
+
+The global-state aggregation below serves only coverage checks (e.g., "does any
+chunk define a refund window?"), never cross-chunk claim comparison.
+
+No NLP, no LLM, no embeddings — pure structured analysis.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
+from confabra.profiles.saas import CANONICAL_TIER_NAMES
 from confabra.schemas import KBChunk
 
 
 # ---------------------------------------------------------------------------
-# Dataclasses for 5 invariant groups
+# Tier vocabulary constants
+# ---------------------------------------------------------------------------
+
+# Non-canonical words that are sometimes used in place of canonical tier names.
+# Case-insensitive matching is applied at check time.
+_NON_CANONICAL_TIER_WORDS: frozenset[str] = frozenset(
+    {"standard", "pro", "basic", "premium", "free", "plus", "business", "team"}
+)
+
+# Canonical tier names in lowercase for case-drift detection in claims.
+_CANONICAL_LOWER: frozenset[str] = frozenset(t.lower() for t in CANONICAL_TIER_NAMES)
+
+# Combined set: anything that looks like a tier name token.
+_ALL_TIER_LIKE: frozenset[str] = _NON_CANONICAL_TIER_WORDS | _CANONICAL_LOWER | frozenset(
+    t.lower() for t in CANONICAL_TIER_NAMES
+)
+
+# Words that signal a tier-name context in free text.
+_TIER_CTX = r"(?:plans?|tiers?|pricing|subscriptions?|accounts?|customers?)"
+
+# Non-canonical tier pattern (case-insensitive word boundary, not hyphenated).
+_NC = r"(?:" + "|".join(sorted(_NON_CANONICAL_TIER_WORDS)) + r")"
+
+_TEXT_PATTERNS: list[re.Pattern[str]] = [
+    # Non-canonical word immediately before a tier-context word (0–1 intervening words).
+    re.compile(rf"(?i)\b{_NC}(?!-)\b(?:\s+\w+)?\s+{_TIER_CTX}\b"),
+    # Non-canonical word immediately after a tier-context word.
+    re.compile(rf"(?i)\b{_TIER_CTX}\s+\b{_NC}(?!-)\b"),
+    # Preposition + non-canonical tier name.
+    re.compile(rf"(?i)\b(?:upgrade to|on|for|using|switch to|downgrade to|available (?:on|for))\s+\b{_NC}(?!-)\b"),
+    # Non-canonical in a list alongside a canonical tier name.
+    re.compile(
+        rf"(?i)\b{_NC}(?!-)\b\s*(?:,\s*|\s+or\s+|\s+and\s+)"
+        rf"(?:{'|'.join(t.lower() for t in CANONICAL_TIER_NAMES)})\b"
+    ),
+    # Canonical tier name listed alongside a non-canonical word.
+    re.compile(
+        rf"(?i)\b(?:{'|'.join(t.lower() for t in CANONICAL_TIER_NAMES)})\b"
+        rf"\s*(?:,\s*|\s+or\s+|\s+and\s+)\b{_NC}(?!-)\b"
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Dataclasses for global coverage aggregation
 # ---------------------------------------------------------------------------
 
 
@@ -24,11 +81,11 @@ from confabra.schemas import KBChunk
 class FeatureGateClaims:
     """Plan-tier feature availability assertions."""
 
-    sso_available_plans: list[str] | None = None        # from sso_saml_setup chunk
-    sso_org_level_enforced: bool | None = None           # from enterprise_sso chunk
+    sso_available_plans: list[str] | None = None
+    sso_org_level_enforced: bool | None = None
     priority_support_included_in_enterprise: bool | None = None
     priority_support_price_monthly_usd: float | None = None
-    plan_names_seen: list[str] = field(default_factory=list)  # all plan names mentioned
+    plan_names_seen: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -37,7 +94,7 @@ class RefundPolicyClaims:
 
     refund_window_days: int | None = None
     annual_monetary_refund_eligible: bool | None = None
-    refund_denied_if_api_credits_exceeded: int | None = None  # the threshold
+    refund_denied_if_api_credits_exceeded: int | None = None
     processing_days_current_min: int | None = None
     processing_days_current_max: int | None = None
     exceptions_after_window: bool | None = None
@@ -47,7 +104,7 @@ class RefundPolicyClaims:
 class ApiLimitsClaims:
     """API rate limits and webhook configuration assertions."""
 
-    rate_limit_standard_per_min: int | None = None
+    rate_limit_starter_per_min: int | None = None
     rate_limit_enterprise_per_min: int | None = None
     webhook_response_timeout_seconds: int | None = None
     webhook_protocol: str | None = None
@@ -55,21 +112,19 @@ class ApiLimitsClaims:
 
 @dataclass
 class DataPolicyClaims:
-    """Data retention and export constraint assertions."""
+    """Data retention assertions."""
 
     retention_days_post_cancellation: int | None = None
-    export_immediate_threshold_records: int | None = None  # two chunks differ — see warning
 
 
 @dataclass
 class GlobalState:
-    """Aggregated claims across all KB chunks, with source tracking."""
+    """Aggregated claims across all KB chunks — used only for coverage checks."""
 
     feature_gate: FeatureGateClaims = field(default_factory=FeatureGateClaims)
     refund: RefundPolicyClaims = field(default_factory=RefundPolicyClaims)
     api: ApiLimitsClaims = field(default_factory=ApiLimitsClaims)
     data: DataPolicyClaims = field(default_factory=DataPolicyClaims)
-    # Source tracking: field_name → list of chunk_ids that set it
     sources: dict[str, list[str]] = field(default_factory=dict)
 
 
@@ -82,22 +137,76 @@ class GlobalState:
 class InvariantReport:
     """Result of running the invariant checker against a set of KB chunks."""
 
-    errors: list[str]    # contradictions that must be fixed
-    warnings: list[str]  # coverage gaps and informational notices
+    errors: list[str]
+    warnings: list[str]
 
 
 # ---------------------------------------------------------------------------
-# Helper
+# Per-chunk validators
+# ---------------------------------------------------------------------------
+
+
+def validate_chunk_structure(chunk: KBChunk) -> list[str]:
+    """
+    Per-chunk structural validation. Returns a list of error messages.
+
+    Currently a thin extension point — structural rules (domain presence, gate
+    references) are enforced by test_kb_lint.py and test_properties.py.
+    Add rules here as the checker grows.
+    """
+    return []
+
+
+def validate_controlled_vocab(chunk: KBChunk) -> list[str]:
+    """
+    Per-chunk controlled-vocabulary validation. Returns a list of error messages.
+
+    Two-part check with explicit asymmetry:
+      - Claims (strict): any string claim value that looks like a tier name must
+        be an exact member of CANONICAL_TIER_NAMES.
+      - Text (heuristic): pattern-based proximity matching detects non-canonical
+        tier words used in a tier-name context. See _TEXT_PATTERNS for the
+        contracts; tests/test_invariant_checker.py is the source of truth.
+
+    Adversarial chunks are excluded — their text is intentionally misleading.
+    """
+    if chunk.adversarial:
+        return []
+
+    errors: list[str] = []
+    cid = chunk.chunk_id
+
+    # --- Claims (strict) ---
+    for key, value in (chunk.claims or {}).items():
+        if not isinstance(value, str):
+            continue
+        lower = value.lower()
+        if lower in _ALL_TIER_LIKE and value not in CANONICAL_TIER_NAMES:
+            errors.append(
+                f"{cid}: claim '{key}' has non-canonical tier name '{value}' "
+                f"— use one of {sorted(CANONICAL_TIER_NAMES)}"
+            )
+
+    # --- Text (heuristic) ---
+    for pattern in _TEXT_PATTERNS:
+        match = pattern.search(chunk.chunk_text)
+        if match:
+            errors.append(
+                f"{cid}: chunk text contains non-canonical tier reference "
+                f"'{match.group(0).strip()}' — use canonical names "
+                f"{sorted(CANONICAL_TIER_NAMES)}"
+            )
+            break  # one error per chunk; first match is sufficient
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Global coverage helpers
 # ---------------------------------------------------------------------------
 
 
 def _fmt_sources(state: GlobalState, *field_names: str) -> str:
-    """
-    Format source chunk IDs into a human-readable parenthetical for error messages.
-
-    Collects all chunk IDs that contributed to each named field, deduplicates,
-    sorts for determinism, and wraps in "(sources: ...)".
-    """
     all_sources: list[str] = []
     for name in field_names:
         all_sources.extend(state.sources.get(name, []))
@@ -105,40 +214,22 @@ def _fmt_sources(state: GlobalState, *field_names: str) -> str:
 
 
 def _track(state: GlobalState, field_name: str, chunk_id: str) -> None:
-    """
-    Record that chunk_id contributed a value for field_name.
-
-    Creates the list on first call; appends on subsequent calls so that
-    multi-chunk coverage of the same field is visible in error messages.
-    """
     state.sources.setdefault(field_name, [])
     state.sources[field_name].append(chunk_id)
 
 
-# ---------------------------------------------------------------------------
-# Ingest
-# ---------------------------------------------------------------------------
-
-
-def ingest(chunk_id: str, claims: dict[str, Any], state: GlobalState) -> None:
+def _ingest(chunk_id: str, claims: dict[str, Any], state: GlobalState) -> None:
     """
-    Merge a single chunk's claims into the global state, tracking sources.
+    Merge a single chunk's claims into the global state for coverage tracking.
 
-    Each recognised claim key maps to a specific field on one of the four
-    domain sub-states (feature_gate, refund, api, data). The last chunk to
-    set a field wins — multi-source conflicts are detected at check time by
-    inspecting state.sources for fields with >1 entry.
-
-    ``processing_days_min/max`` and their aliases are only ingested when
-    ``claims.get("policy_status") == "current"``, so superseded-policy
-    chunks don't pollute the current-policy baseline.
+    Only updates fields — no cross-chunk comparison is performed here.
+    The global state is used exclusively to detect coverage gaps.
     """
     fg = state.feature_gate
     rf = state.refund
     ap = state.api
     da = state.data
 
-    # --- Feature gate ---
     if "sso_available_plans" in claims:
         fg.sso_available_plans = claims["sso_available_plans"]
         _track(state, "sso_available_plans", chunk_id)
@@ -159,7 +250,6 @@ def ingest(chunk_id: str, claims: dict[str, Any], state: GlobalState) -> None:
         fg.plan_names_seen.append(str(claims["plan_name"]))
         _track(state, "plan_names_seen", chunk_id)
 
-    # --- Refund policy ---
     if "refund_window_days" in claims:
         rf.refund_window_days = claims["refund_window_days"]
         _track(state, "refund_window_days", chunk_id)
@@ -176,7 +266,6 @@ def ingest(chunk_id: str, claims: dict[str, Any], state: GlobalState) -> None:
         rf.exceptions_after_window = claims["exceptions_after_window"]
         _track(state, "exceptions_after_window", chunk_id)
 
-    # Processing time: only ingest when policy_status is "current"
     is_current = claims.get("policy_status") == "current"
     if is_current:
         for key_min in ("processing_days_min", "refund_processing_days_min"):
@@ -184,17 +273,17 @@ def ingest(chunk_id: str, claims: dict[str, Any], state: GlobalState) -> None:
                 rf.processing_days_current_min = claims[key_min]
                 _track(state, "processing_days_current_min", chunk_id)
                 break
-
         for key_max in ("processing_days_max", "refund_processing_days_max"):
             if key_max in claims:
                 rf.processing_days_current_max = claims[key_max]
                 _track(state, "processing_days_current_max", chunk_id)
                 break
 
-    # --- API limits ---
+    # rate_limit_standard_per_min is retained as claim key for backward
+    # compatibility; the canonical tier name "Starter" lives in chunk text.
     if "rate_limit_standard_per_min" in claims:
-        ap.rate_limit_standard_per_min = claims["rate_limit_standard_per_min"]
-        _track(state, "rate_limit_standard_per_min", chunk_id)
+        ap.rate_limit_starter_per_min = claims["rate_limit_standard_per_min"]
+        _track(state, "rate_limit_starter_per_min", chunk_id)
 
     if "rate_limit_enterprise_per_min" in claims:
         ap.rate_limit_enterprise_per_min = claims["rate_limit_enterprise_per_min"]
@@ -208,18 +297,13 @@ def ingest(chunk_id: str, claims: dict[str, Any], state: GlobalState) -> None:
         ap.webhook_protocol = claims["webhook_protocol"]
         _track(state, "webhook_protocol", chunk_id)
 
-    # --- Data policy ---
     if "retention_days_post_cancellation" in claims:
         da.retention_days_post_cancellation = claims["retention_days_post_cancellation"]
         _track(state, "retention_days_post_cancellation", chunk_id)
 
-    if "export_immediate_threshold_records" in claims:
-        da.export_immediate_threshold_records = claims["export_immediate_threshold_records"]
-        _track(state, "export_immediate_threshold_records", chunk_id)
-
 
 # ---------------------------------------------------------------------------
-# Checker functions
+# Global coverage checks (not cross-chunk claim comparison)
 # ---------------------------------------------------------------------------
 
 
@@ -233,9 +317,6 @@ def _check_feature_gates(state: GlobalState) -> tuple[list[str], list[str]]:
     """
     errors, warnings = [], []
 
-    # Priority support must not be both included AND priced separately.
-    # Both claims being True (included=True, price set) would be a contradiction.
-    # Note: the current KB has included=False with price=299, which is consistent.
     if (
         state.feature_gate.priority_support_included_in_enterprise is True
         and state.feature_gate.priority_support_price_monthly_usd is not None
@@ -250,7 +331,6 @@ def _check_feature_gates(state: GlobalState) -> tuple[list[str], list[str]]:
             f"priced at ${state.feature_gate.priority_support_price_monthly_usd}/mo. {sources}"
         )
 
-    # Coverage warning: no plan names seen.
     if not state.feature_gate.plan_names_seen:
         warnings.append("No plan names (Starter/Growth/Enterprise) found in KB claims")
 
@@ -259,26 +339,16 @@ def _check_feature_gates(state: GlobalState) -> tuple[list[str], list[str]]:
 
 def _check_refund_policy(state: GlobalState) -> tuple[list[str], list[str]]:
     """
-    Check refund window and eligibility consistency.
+    Check refund window coverage.
 
-    Detects: multiple chunks that disagree on refund_window_days (last-write-wins
-    masking a disagreement, surfaced via >1 sources entry).
-    Warns: no chunk defines a refund window length.
+    Warns only when no chunk defines a refund window length (coverage gap).
+    Multiple chunks may define this field without conflict — cross-chunk
+    comparison is not performed.
     """
     errors, warnings = [], []
 
-    sources_for_window = state.sources.get("refund_window_days", [])
-    if len(sources_for_window) == 0:
+    if state.refund.refund_window_days is None:
         warnings.append("No chunk defines a refund window length")
-    elif len(sources_for_window) > 1:
-        # Multiple chunks wrote to this field — check that they all agree
-        # (last-write-wins means we can only see the final value, so we warn
-        # rather than error here; a real conflict would be caught in KB authoring).
-        warnings.append(
-            f"refund_window_days set by {len(sources_for_window)} chunks "
-            f"{_fmt_sources(state, 'refund_window_days')} — verify all agree on "
-            f"{state.refund.refund_window_days} days."
-        )
 
     return errors, warnings
 
@@ -287,41 +357,15 @@ def _check_api_limits(state: GlobalState) -> tuple[list[str], list[str]]:
     """
     Check API rate limit coverage.
 
-    Warns when either the standard or enterprise plan rate limit is absent from
+    Warns when either the Starter or Enterprise plan rate limit is absent from
     the KB claims — both are required for agents to answer tier-specific queries.
     """
     errors, warnings = [], []
 
-    if state.api.rate_limit_standard_per_min is None:
-        warnings.append("No standard plan API rate limit defined in KB claims")
+    if state.api.rate_limit_starter_per_min is None:
+        warnings.append("No Starter plan API rate limit defined in KB claims")
     if state.api.rate_limit_enterprise_per_min is None:
-        warnings.append("No enterprise plan API rate limit defined in KB claims")
-
-    return errors, warnings
-
-
-def _check_data_policy(state: GlobalState) -> tuple[list[str], list[str]]:
-    """
-    Check data retention and export constraint consistency.
-
-    Detects: export_immediate_threshold_records set by multiple chunks with
-    different values (kb_chunk_data_export_conditional_v2 says 1M records;
-    kb_chunk_data_portability_v2 says 100k). These describe different operations
-    (max queued-export size vs. instant-export ceiling) — flagged as a warning
-    so KB authors can either unify the language or add distinct claim keys.
-    """
-    errors, warnings = [], []
-
-    if state.data.export_immediate_threshold_records is not None:
-        sources = state.sources.get("export_immediate_threshold_records", [])
-        if len(sources) > 1:
-            warnings.append(
-                f"Multiple export threshold values defined across {len(sources)} chunks "
-                f"{_fmt_sources(state, 'export_immediate_threshold_records')}. "
-                f"Final value is {state.data.export_immediate_threshold_records:,} records — "
-                "verify the chunks describe the same operation (instant export ceiling vs. "
-                "max export size may warrant separate claim keys)."
-            )
+        warnings.append("No Enterprise plan API rate limit defined in KB claims")
 
     return errors, warnings
 
@@ -330,19 +374,15 @@ def _check_coverage(state: GlobalState) -> tuple[list[str], list[str]]:
     """
     Check that critical invariant groups have at least one claim.
 
-    Coverage gaps are warnings (not errors) because a missing claim means the
-    checker has no data, not that the KB contains a contradiction.
+    Coverage gaps are warnings (not errors) — a missing claim means the checker
+    has no data, not that the KB contains a contradiction.
     """
     errors, warnings = [], []
 
     if state.refund.refund_window_days is None:
-        warnings.append(
-            "No refund window defined — refund policy coverage may be insufficient"
-        )
+        warnings.append("No refund window defined — refund policy coverage may be insufficient")
     if state.data.retention_days_post_cancellation is None:
-        warnings.append(
-            "No post-cancellation data retention period defined"
-        )
+        warnings.append("No post-cancellation data retention period defined")
 
     return errors, warnings
 
@@ -356,31 +396,29 @@ def run_checker(chunks: list[KBChunk]) -> InvariantReport:
     """
     Run the invariant checker against a list of KB chunks.
 
-    Returns an InvariantReport with errors (contradictions) and warnings
-    (coverage gaps and multi-source discrepancies).
+    Returns an InvariantReport with errors (contradictions or vocabulary
+    violations) and warnings (coverage gaps).
 
-    Only ingests claims from non-adversarial chunks; adversarial chunks are
-    intentionally inconsistent and should not pollute the global state.
-    Chunks with empty claims dicts are skipped without error.
+    Per-chunk validation (validate_chunk_structure + validate_controlled_vocab)
+    runs for every non-adversarial chunk. Global coverage checks aggregate claim
+    presence across all non-adversarial chunks but never compare claim values
+    across chunks.
     """
     state = GlobalState()
-
-    for chunk in chunks:
-        if chunk.adversarial or not chunk.claims:
-            continue
-        ingest(chunk.chunk_id, chunk.claims, state)
-
     errors: list[str] = []
     warnings: list[str] = []
 
-    checkers = [
-        _check_feature_gates,
-        _check_refund_policy,
-        _check_api_limits,
-        _check_data_policy,
-        _check_coverage,
-    ]
-    for checker in checkers:
+    for chunk in chunks:
+        if chunk.adversarial:
+            continue
+
+        errors.extend(validate_chunk_structure(chunk))
+        errors.extend(validate_controlled_vocab(chunk))
+
+        if chunk.claims:
+            _ingest(chunk.chunk_id, chunk.claims, state)
+
+    for checker in [_check_feature_gates, _check_refund_policy, _check_api_limits, _check_coverage]:
         e, w = checker(state)
         errors.extend(e)
         warnings.extend(w)

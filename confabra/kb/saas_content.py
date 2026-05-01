@@ -193,9 +193,9 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         document_id="doc_api_rate_limits_v3",
         document_path="product_docs/api_rate_limits.md",
         chunk_text=(
-            "API rate limits differ by plan: Standard plans receive 1,000 requests per minute; Enterprise "
+            "API rate limits differ by plan: Starter plans receive 1,000 requests per minute; Enterprise "
             "plans receive 10,000 requests per minute. Requests that exceed the limit are queued for up to "
-            "30 seconds before returning a 429 Too Many Requests error. Burst headroom is not available on Standard."
+            "30 seconds before returning a 429 Too Many Requests error. Burst headroom is not available on Starter."
         ),
         constraint_type=ConstraintType.INFORMATIONAL,
         effective_date=date(2026, 2, 1),
