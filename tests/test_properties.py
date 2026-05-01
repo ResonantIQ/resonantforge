@@ -1512,12 +1512,15 @@ def test_kb_domain_tag_completeness_existing() -> None:
 
 
 def test_adversarial_chunks_marked_correctly() -> None:
-    """The 3 adversarial KB fixtures must have adversarial=True set on the KBChunk model field."""
+    """All adversarial KB fixtures must have adversarial=True set on the KBChunk model field."""
     from confabra.kb.saas_content import get_saas_kb_chunks
     EXPECTED_ADVERSARIAL = {
         "kb_chunk_refund_eligibility_timelines_v1",
         "kb_chunk_refund_grace_period_stale_v1",
         "kb_chunk_all_customers_refund_bait_v1",
+        "kb_chunk_ti_severity_inflation_adv_v1",
+        "kb_chunk_ti_resolution_overpromise_adv_v1",
+        "kb_chunk_ti_diagnostic_omission_adv_v1",
     }
     chunks = get_saas_kb_chunks()
     adversarial_set = {c.chunk_id for c in chunks if c.adversarial}
