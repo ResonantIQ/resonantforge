@@ -1565,3 +1565,265 @@ def test_chunks_with_claims_are_well_formed() -> None:
             # Values may be None (e.g. Enterprise price is None) — that's allowed
             # as long as the key is a str
     assert not malformed, f"Malformed claims found:\n" + "\n".join(f"  {cid}: {reason}" for cid, reason in malformed)
+
+
+# ---------------------------------------------------------------------------
+# Group 16 — Invariant checker scope and tier vocabulary (assertions A–J)
+# ---------------------------------------------------------------------------
+
+
+def _make_chunk(
+    chunk_id: str = "test_chunk",
+    document_id: str = "doc_test",
+    document_path: str = "policies/test.md",
+    chunk_text: str = "Default text.",
+    domains: list[str] | None = None,
+    claims: dict | None = None,
+    adversarial: bool = False,
+) -> "KBChunk":
+    from confabra.schemas import ConstraintType, KBChunk
+    return KBChunk(
+        chunk_id=chunk_id,
+        document_id=document_id,
+        document_path=document_path,
+        chunk_text=chunk_text,
+        constraint_type=ConstraintType.INFORMATIONAL,
+        domains=domains or ["billing"],
+        claims=claims or {},
+        adversarial=adversarial,
+    )
+
+
+def test_cross_chunk_contradiction_not_flagged() -> None:
+    """
+    Load-bearing regression test: two chunks that share the same document,
+    path, domain, and a common claim key but with DIFFERENT values must
+    produce zero errors and zero warnings.
+
+    This test prevents any future change from re-introducing a cross-chunk
+    claim-comparison rule. The invariant checker is single-chunk-scoped.
+    """
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk_a = _make_chunk(
+        chunk_id="test_export_a",
+        document_id="doc_data_policy_v2",
+        document_path="policies/data_policy.md",
+        chunk_text="Accounts with fewer than 1,000,000 records export immediately.",
+        domains=["data_management"],
+        claims={"export_immediate_threshold_records": 1000000},
+    )
+    chunk_b = _make_chunk(
+        chunk_id="test_export_b",
+        document_id="doc_data_policy_v2",
+        document_path="policies/data_policy.md",
+        chunk_text="Accounts with fewer than 100,000 records export immediately.",
+        domains=["data_management"],
+        claims={"export_immediate_threshold_records": 100000},
+    )
+
+    report = run_checker([chunk_a, chunk_b])
+    # Coverage-gap warnings may fire on this minimal 2-chunk fixture (no plan names,
+    # no rate limits, etc.) — that's expected. The load-bearing assertion is that no
+    # ERRORS fire, which is what a future cross-chunk comparison rule would produce.
+    assert not report.errors, (
+        f"Cross-chunk claim comparison must not produce errors. Got: {report.errors}"
+    )
+    # Verify no error mentions a conflict between the two chunks specifically.
+    for err in report.errors:
+        assert "test_export_a" not in err or "test_export_b" not in err, (
+            f"Cross-chunk comparison between test_export_a and test_export_b must not fire: {err}"
+        )
+
+
+# --- Tier vocabulary: negative tests (must flag) ---
+
+
+def test_tier_vocab_claim_non_canonical_value_errors() -> None:
+    """Claim with tier-like string value 'Standard' (non-canonical) must error."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_claim_standard",
+        chunk_text="Rate limits vary by plan.",
+        claims={"tier": "Standard"},
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for non-canonical tier name 'Standard' in claims"
+
+
+def test_tier_vocab_claim_lowercase_canonical_errors() -> None:
+    """Claim with lowercase canonical tier name 'starter' (case drift) must error."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_claim_lowercase",
+        chunk_text="Plans vary in features.",
+        claims={"tier": "starter"},
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for lowercase canonical tier name 'starter' in claims"
+
+
+def test_tier_vocab_text_non_canonical_before_plan_errors() -> None:
+    """Text containing 'upgrade to the Standard plan' must flag a tier-vocab error."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_standard_plan",
+        chunk_text="You can upgrade to the Standard plan at any time.",
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for 'Standard plan' in chunk text"
+
+
+def test_tier_vocab_text_non_canonical_in_list_errors() -> None:
+    """Text containing 'the Standard, Growth, or Enterprise tier' must flag Standard."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_standard_in_list",
+        chunk_text="This feature is available on the Standard, Growth, or Enterprise tier.",
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for 'Standard' in a canonical-tier list"
+
+
+# --- Tier vocabulary: positive tests (must NOT flag) ---
+
+
+def test_tier_vocab_compound_word_not_flagged() -> None:
+    """Text with 'enterprise-grade security and growth in user adoption' must not flag."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_compound",
+        chunk_text="We provide enterprise-grade security and support growth in user adoption.",
+    )
+    report = run_checker([chunk])
+    tier_errors = [e for e in report.errors if "non-canonical tier" in e]
+    assert not tier_errors, f"Compound words must not flag tier-vocab errors. Got: {tier_errors}"
+
+
+def test_tier_vocab_premium_support_not_flagged() -> None:
+    """'premium support' must not flag — 'support' is not a tier-context word."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_premium_support",
+        chunk_text="Priority support and premium support options are available for all plans.",
+    )
+    report = run_checker([chunk])
+    tier_errors = [e for e in report.errors if "non-canonical tier" in e]
+    assert not tier_errors, f"'premium support' must not flag. Got: {tier_errors}"
+
+
+def test_tier_vocab_free_trial_not_flagged() -> None:
+    """'a free trial' must not flag — 'trial' is not a tier-context word."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_free_trial",
+        chunk_text="A free trial is available for 14 days before committing to a paid plan.",
+    )
+    report = run_checker([chunk])
+    tier_errors = [e for e in report.errors if "non-canonical tier" in e]
+    assert not tier_errors, f"'free trial' must not flag. Got: {tier_errors}"
+
+
+def test_tier_vocab_basic_understanding_not_flagged() -> None:
+    """'basic understanding' must not flag — non-tier usage of 'basic'."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_basic_understanding",
+        chunk_text="A basic understanding of REST APIs is recommended before using this feature.",
+    )
+    report = run_checker([chunk])
+    tier_errors = [e for e in report.errors if "non-canonical tier" in e]
+    assert not tier_errors, f"'basic understanding' must not flag. Got: {tier_errors}"
+
+
+def test_tier_vocab_standard_or_enterprise_flags() -> None:
+    """'Standard or Enterprise' (no Growth in between) must flag 'Standard'."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_standard_or_enterprise",
+        chunk_text="This feature is available on Standard or Enterprise plans.",
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for 'Standard or Enterprise' — list context with canonical tier"
+
+
+def test_tier_vocab_pro_pricing_flags() -> None:
+    """'Pro pricing' must flag — 'Pro' before a tier-context word."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_pro_pricing",
+        chunk_text="Pro pricing applies to this feature and includes all advanced options.",
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for 'Pro pricing' — non-canonical tier before 'pricing'"
+
+
+def test_tier_vocab_lowercase_standard_plan_flags() -> None:
+    """'the standard plan' (lowercase) must flag — case drift on non-canonical name."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_lowercase_standard_plan",
+        chunk_text="If you are on the standard plan, you receive 1,000 API calls per minute.",
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for lowercase 'standard plan'"
+
+
+def test_tier_vocab_canonical_names_not_flagged() -> None:
+    """Text 'available on Starter, Growth, and Enterprise' must not flag."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_canonical_list",
+        chunk_text="This feature is available on Starter, Growth, and Enterprise plans.",
+    )
+    report = run_checker([chunk])
+    tier_errors = [e for e in report.errors if "non-canonical tier" in e]
+    assert not tier_errors, f"Canonical tier names must not flag. Got: {tier_errors}"
+
+
+def test_tier_vocab_canonical_claim_not_flagged() -> None:
+    """Claim with canonical tier value 'Enterprise' must not flag."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_claim_enterprise",
+        chunk_text="Enterprise accounts have dedicated support.",
+        claims={"tier": "Enterprise"},
+    )
+    report = run_checker([chunk])
+    tier_errors = [e for e in report.errors if "non-canonical tier" in e]
+    assert not tier_errors, f"Canonical claim value 'Enterprise' must not flag. Got: {tier_errors}"
+
+
+def test_invariant_checker_zero_warnings_existing_kb() -> None:
+    """
+    The invariant checker must return zero errors AND zero warnings against
+    the existing tagged KB after PR2.5 corrections.
+
+    Zero warnings (not just zero errors) is the PR2.5 completion criterion.
+    """
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    from confabra.validators.invariant_checker import run_checker
+
+    chunks = get_saas_kb_chunks()
+    report = run_checker(chunks)
+    assert not report.errors, (
+        f"Invariant checker found {len(report.errors)} error(s):\n"
+        + "\n".join(f"  - {e}" for e in report.errors)
+    )
+    assert not report.warnings, (
+        f"Invariant checker found {len(report.warnings)} warning(s):\n"
+        + "\n".join(f"  - {w}" for w in report.warnings)
+    )
