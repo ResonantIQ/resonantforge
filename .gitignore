@@ -1,0 +1,12 @@
+# Python virtual environment
+.venv/
+
+# Corpus output directories — smoke runs, live runs, any generated corpus.
+# Pattern covers: corpus/, corpus-smoke/, corpus-live-smoke/, corpus-live-smoke-2/, etc.
+corpus*/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
