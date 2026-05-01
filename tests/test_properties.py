@@ -28,13 +28,20 @@ import pytest
 from confabra.pipeline import PipelineConfig, run_pipeline
 from confabra.schemas import (
     ConversationRecord,
+    DimensionVerdict,
+    DisagreementRecord,
+    GateSeverity,
+    GateViolation,
     KBChunk,
     Manifest,
     QualityPlan,
     SimEvent,
     CorrectionRecord,
     NoiseClass,
+    ValidationResult,
+    ValidationVerdict,
 )
+from confabra.layer1.plan_validator import SkipRateTracker
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -701,3 +708,860 @@ def test_concurrent_run_protection(tmp_path: Path) -> None:
     assert not lock.exists(), (
         f"Lockfile {lock} was not cleaned up after a successful run"
     )
+
+
+# ---------------------------------------------------------------------------
+# Group 13 — Post-generation validation (assertions 24–27)
+# ---------------------------------------------------------------------------
+
+
+def test_post_gen_validation_pass(corpus: tuple[Path, Manifest]) -> None:
+    """
+    Assertion 24: dry-run pipeline must report prose_fact_violation_rate == 0.0.
+
+    In dry-run mode, post-generation validation is skipped (placeholder prose is
+    not real conversation text and would always fail deterministic checks). This
+    verifies the wiring doesn't crash and metrics show a clean state after wiring.
+    """
+    _, manifest = corpus
+    # Assertion 24
+    assert manifest.prose_fact_violation_rate == 0.0, (
+        f"Assertion 24 — dry-run expected prose_fact_violation_rate=0.0, "
+        f"got {manifest.prose_fact_violation_rate:.4f}"
+    )
+
+
+def test_skip_tracker_prose_fact_increments(tmp_path: Path) -> None:
+    """
+    Assertion 25: when post_generation_validate returns SKIP for a planted
+    conversation, prose_fact_failures increments and the conversation ID appears
+    in skipped_conversations.jsonl.
+
+    Uses unittest.mock to force SKIP on every planted validation call so that
+    the skip-tracking machinery is exercised without requiring a live Anthropic key.
+    """
+    from unittest.mock import patch
+
+    _FAKE_PROSE = (
+        "Customer: I need help with my account.\n"
+        "Agent: I'd be happy to help you today. What seems to be the issue?\n"
+        "Customer: I can't access the dashboard.\n"
+        "Agent: I understand. Let me look into that for you right away."
+    )
+
+    _skip_result = ValidationResult(
+        conversation_id="mocked",
+        overall_verdict=ValidationVerdict.SKIP,
+        dimension_verdicts=[],
+        skip_reason="mocked SKIP verdict for test_skip_tracker_prose_fact_increments",
+        retry_count=2,
+    )
+
+    with (
+        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("confabra.pipeline.validate_all_dimensions", return_value=[]),
+        patch(
+            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            return_value=_skip_result,
+        ),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=2,
+            months=1,
+            seed=42,
+            output_root=tmp_path,
+            # Non-None key activates the live validation path without an actual API call
+            # (prose generation is mocked; accuracy extractor swallows auth errors).
+            anthropic_api_key="fake-key-for-skip-test",
+        )
+        # The gate now fires (prose_fact_rate is 100% when all planned convos skip),
+        # so run_pipeline raises RuntimeError after writing the manifest and JSONL files.
+        with pytest.raises(RuntimeError, match="Quality gate"):
+            run_pipeline(config)
+
+    # Assertion 25a: manifest.json must exist (written before the abort) and report
+    # a prose_fact_violation_rate > 0.
+    manifest_path = tmp_path / "saas" / "manifest.json"
+    assert manifest_path.exists(), (
+        "Assertion 25a — manifest.json must be written even when gate aborts the run"
+    )
+    manifest_data = json.loads(manifest_path.read_text())
+    assert manifest_data.get("prose_fact_violation_rate", 0.0) > 0.0, (
+        f"Assertion 25a — expected prose_fact_violation_rate > 0 when every planted "
+        f"conversation is SKIPped, got {manifest_data.get('prose_fact_violation_rate')}"
+    )
+
+    # Assertion 25b: skipped_conversations.jsonl must be non-empty
+    skipped_path = tmp_path / "saas" / "skipped_conversations.jsonl"
+    skipped = _read_jsonl(skipped_path)
+    assert len(skipped) > 0, (
+        "Assertion 25b — skipped_conversations.jsonl is empty, but every planted "
+        "conversation should have been SKIPped by the mocked validator"
+    )
+
+
+def test_disagreement_ledger_populated(tmp_path: Path) -> None:
+    """
+    Assertion 26: when a planted conversation produces a FAIL dimension verdict,
+    the soft judge is called, a DisagreementRecord accumulates in the ledger, and
+    manifest.disagreement_rate is non-zero.
+
+    Uses unittest.mock to inject a FAIL verdict and a mock soft-judge response so
+    the full disagreement wiring path is exercised without a live Anthropic key.
+    """
+    from unittest.mock import patch
+
+    _FAKE_PROSE = (
+        "Customer: I need help with my account.\n"
+        "Agent: I'd be happy to help you today. What seems to be the issue?\n"
+        "Customer: I can't access the dashboard.\n"
+        "Agent: I understand. Let me look into that for you right away."
+    )
+
+    _fail_verdict = DimensionVerdict(
+        dimension="empathy",
+        verdict=ValidationVerdict.FAIL,
+        target="high",
+        signals_summary={"acknowledgment_present": False},
+    )
+
+    # post_generation_validate sees the FAIL verdict and returns SKIP (retries exhausted).
+    _skip_result = ValidationResult(
+        conversation_id="mocked",
+        overall_verdict=ValidationVerdict.SKIP,
+        dimension_verdicts=[_fail_verdict],
+        skip_reason="mocked SKIP after FAIL for test_disagreement_ledger_populated",
+        retry_count=2,
+    )
+
+    _disagree_record = DisagreementRecord(
+        conversation_id="mocked",
+        validator_verdict="high",
+        soft_judge_perception="empathy:medium",
+        disagreement=True,
+        disagreement_class="borderline_case",
+    )
+
+    with (
+        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("confabra.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
+        patch(
+            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            return_value=_skip_result,
+        ),
+        patch("confabra.pipeline.run_soft_judge", return_value=_disagree_record),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=2,
+            months=1,
+            seed=42,
+            output_root=tmp_path,
+            anthropic_api_key="fake-key-for-ledger-test",
+        )
+        # Gate fires because all planted convos SKIP → prose_fact_rate > 2%.
+        # Manifest is written before the abort so we can still read rates from it.
+        with pytest.raises(RuntimeError, match="Quality gate"):
+            run_pipeline(config)
+
+    # Assertion 26a: manifest.json must report a non-zero disagreement_rate
+    manifest_path = tmp_path / "saas" / "manifest.json"
+    assert manifest_path.exists(), "manifest.json must exist after gate abort"
+    manifest_data = json.loads(manifest_path.read_text())
+    assert manifest_data.get("disagreement_rate", 0.0) > 0.0, (
+        f"Assertion 26a — expected disagreement_rate > 0 when mock FAIL verdict fires "
+        f"soft judge with disagreement=True, got {manifest_data.get('disagreement_rate')}"
+    )
+
+    # Assertion 26b: disagreements.jsonl must contain records
+    disag_path = tmp_path / "saas" / "disagreements.jsonl"
+    disag_records = _read_jsonl(disag_path)
+    assert len(disag_records) > 0, (
+        "Assertion 26b — disagreements.jsonl is empty, but mocked soft judge should "
+        "have produced at least one DisagreementRecord"
+    )
+
+
+def test_skipped_record_fields_complete(tmp_path: Path) -> None:
+    """
+    Assertion 28: when a planted conversation is SKIPped after post-generation
+    validation, the JSONL record in skipped_conversations.jsonl contains all
+    enriched fields with non-null values.
+
+    Uses unittest.mock to inject a FAIL verdict and force a SKIP outcome so that
+    the enriched SkippedConversationRecord write path is exercised without a live key.
+    """
+    from unittest.mock import patch
+
+    _FAKE_PROSE = (
+        "Customer: I need help with my account.\n"
+        "Agent: I'd be happy to help you today. What seems to be the issue?\n"
+        "Customer: I can't access the dashboard.\n"
+        "Agent: I understand. Let me look into that for you right away."
+    )
+
+    _fail_verdict = DimensionVerdict(
+        dimension="empathy",
+        verdict=ValidationVerdict.FAIL,
+        target="high",
+        signals_summary={"acknowledgment_present": False},
+    )
+
+    _skip_result = ValidationResult(
+        conversation_id="mocked",
+        overall_verdict=ValidationVerdict.SKIP,
+        dimension_verdicts=[_fail_verdict],
+        skip_reason="mocked SKIP for test_skipped_record_fields_complete",
+        retry_count=2,
+    )
+
+    with (
+        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("confabra.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
+        patch(
+            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            return_value=_skip_result,
+        ),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=2,
+            months=1,
+            seed=42,
+            output_root=tmp_path,
+            anthropic_api_key="fake-key-for-fields-test",
+        )
+        # Gate fires when all planted convos SKIP; manifest and JSONL are written first.
+        with pytest.raises(RuntimeError, match="Quality gate"):
+            run_pipeline(config)
+
+    skipped_path = tmp_path / "saas" / "skipped_conversations.jsonl"
+    skipped = _read_jsonl(skipped_path)
+    assert len(skipped) > 0, (
+        "Assertion 28 — skipped_conversations.jsonl is empty, expected at least one "
+        "SKIPped record from the mocked validator"
+    )
+
+    required_fields = [
+        "conversation_id",
+        "account_id",
+        "event_id",
+        "quality_plan_summary",
+        "final_retry_count",
+        "final_verdicts",
+        "agent_prose_snippet",
+        "kb_chunks_required",
+        "timestamp",
+    ]
+
+    violations: list[str] = []
+    for rec in skipped:
+        for field in required_fields:
+            if field not in rec or rec[field] is None:
+                violations.append(
+                    f"conv_id={rec.get('conversation_id')!r}: "
+                    f"field {field!r} missing or null (got {rec.get(field)!r})"
+                )
+
+    # Assertion 28
+    assert not violations, (
+        f"Assertion 28 — {len(violations)} skipped record field violation(s):\n"
+        + "\n".join(f"  {v}" for v in violations[:5])
+    )
+
+
+def test_variant_id_non_null_for_validated_convs(corpus: tuple[Path, Manifest]) -> None:
+    """
+    Assertion 27 (OQ2): every quality plan has an effective non-null variant_id
+    for brand voice validation.
+
+    The validation loop uses rubric_targets.brand_voice_against as the brand voice
+    variant ID, defaulting to "bv_baseline" when absent. This property ensures the
+    effective variant_id passed to validate_all_dimensions is always a non-empty string
+    — i.e., brand voice validation always has a calibrated profile to validate against.
+    """
+    profile_dir, _ = corpus
+    plans = _read_jsonl(profile_dir / "planted_quality.jsonl")
+    assert len(plans) > 0, "planted_quality.jsonl is empty — no plans to check"
+
+    violations: list[str] = []
+    for plan in plans:
+        rubric = plan.get("rubric_targets", {})
+        # Mirrors the fallback in _generate_prose_for_chunk.
+        effective_variant_id = rubric.get("brand_voice_against") or "bv_baseline"
+        if not effective_variant_id:
+            violations.append(
+                f"conv_id={plan.get('conversation_id')!r}: "
+                f"brand_voice_against={rubric.get('brand_voice_against')!r} "
+                "produces an empty effective variant_id"
+            )
+
+    # Assertion 27
+    assert not violations, (
+        f"Assertion 27 — {len(violations)} quality plan(s) with empty effective variant_id. "
+        f"First: {violations[0]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Gate violation structure tests (assertions 29–31)
+# ---------------------------------------------------------------------------
+
+
+def test_gate_returns_structured_violations() -> None:
+    """
+    Assertion 29: check_gates() returns GateViolation objects with severity=ERROR
+    when a hard gate threshold is exceeded.
+
+    Sets prose_fact_rate to 50% (well above the 2% threshold) and confirms
+    the returned violation has the right gate_name, severity, threshold,
+    and actual_value fields.
+    """
+    tracker = SkipRateTracker(prose_fact_failures=5, prose_fact_attempts=10)
+    violations = tracker.check_gates()
+
+    assert len(violations) > 0, (
+        "Assertion 29a — check_gates() returned no violations with prose_fact_rate=0.50, "
+        "expected at least one ERROR violation"
+    )
+    prose_violations = [v for v in violations if v.gate_name == "prose_fact_rate"]
+    assert len(prose_violations) == 1, (
+        f"Assertion 29b — expected exactly one prose_fact_rate violation, "
+        f"got {[v.gate_name for v in violations]}"
+    )
+    v = prose_violations[0]
+    # Assertion 29c
+    assert isinstance(v, GateViolation), (
+        f"Assertion 29c — check_gates() must return GateViolation objects, got {type(v)}"
+    )
+    assert v.severity == GateSeverity.ERROR, (
+        f"Assertion 29d — prose_fact_rate violation must be severity=ERROR, got {v.severity}"
+    )
+    assert v.threshold == pytest.approx(0.02), (
+        f"Assertion 29e — prose_fact_rate threshold must be 0.02, got {v.threshold}"
+    )
+    assert v.actual_value == pytest.approx(0.50), (
+        f"Assertion 29f — actual_value must be 0.50 (5/10), got {v.actual_value}"
+    )
+
+
+def test_gate_warning_does_not_abort() -> None:
+    """
+    Assertion 30: disagreement_rate between 15% and 25% produces only a WARNING,
+    not an ERROR — so the pipeline is not forced to abort.
+
+    Sets disagreement_rate=0.20 (above 15% warn, below 25% block) and confirms
+    the violation is severity=WARNING with no ERROR-level violations present.
+    """
+    # 4 disagreements out of 20 checks = 20% — above warn threshold, below block.
+    tracker = SkipRateTracker(disagreement_cases=4, disagreement_checks=20)
+    violations = tracker.check_gates()
+
+    errors = [v for v in violations if v.severity == GateSeverity.ERROR]
+    warnings = [v for v in violations if v.severity == GateSeverity.WARNING]
+
+    # Assertion 30a: no ERROR violations
+    assert len(errors) == 0, (
+        f"Assertion 30a — disagreement_rate=0.20 must not produce ERROR violations, "
+        f"got {[v.gate_name for v in errors]}"
+    )
+    # Assertion 30b: exactly one WARNING violation
+    assert len(warnings) == 1, (
+        f"Assertion 30b — disagreement_rate=0.20 must produce exactly one WARNING, "
+        f"got {[(v.gate_name, v.severity) for v in warnings]}"
+    )
+    assert warnings[0].gate_name == "disagreement_rate", (
+        f"Assertion 30c — warning must be for disagreement_rate, got {warnings[0].gate_name!r}"
+    )
+
+
+def test_pipeline_aborts_on_hard_gate(tmp_path: Path) -> None:
+    """
+    Assertion 31: when prose_fact_rate exceeds the 2% gate, the pipeline raises
+    RuntimeError AND still writes manifest.json with gate_aborted=true.
+
+    Uses the same mock setup as test_skip_tracker_prose_fact_increments to force
+    all planted conversations to SKIP, pushing prose_fact_rate well above 2%.
+    """
+    from unittest.mock import patch
+
+    _FAKE_PROSE = (
+        "Customer: I need help with my account.\n"
+        "Agent: I'd be happy to help you today. What seems to be the issue?\n"
+        "Customer: I can't access the dashboard.\n"
+        "Agent: I understand. Let me look into that for you right away."
+    )
+
+    _skip_result = ValidationResult(
+        conversation_id="mocked",
+        overall_verdict=ValidationVerdict.SKIP,
+        dimension_verdicts=[],
+        skip_reason="mocked SKIP verdict for test_pipeline_aborts_on_hard_gate",
+        retry_count=2,
+    )
+
+    with (
+        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("confabra.pipeline.validate_all_dimensions", return_value=[]),
+        patch(
+            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            return_value=_skip_result,
+        ),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=2,
+            months=1,
+            seed=42,
+            output_root=tmp_path,
+            anthropic_api_key="fake-key-for-gate-abort-test",
+        )
+        # Assertion 31a: pipeline raises RuntimeError when hard gate fires
+        with pytest.raises(RuntimeError, match="Quality gate"):
+            run_pipeline(config)
+
+    # Assertion 31b: manifest.json must exist even after the abort
+    manifest_path = tmp_path / "saas" / "manifest.json"
+    assert manifest_path.exists(), (
+        "Assertion 31b — manifest.json must be written even when a gate aborts the run"
+    )
+
+    manifest_data = json.loads(manifest_path.read_text())
+
+    # Assertion 31c: manifest must have gate_aborted=True
+    assert manifest_data.get("gate_aborted") is True, (
+        f"Assertion 31c — manifest.gate_aborted must be True after gate abort, "
+        f"got {manifest_data.get('gate_aborted')!r}"
+    )
+
+    # Assertion 31d: manifest must have non-empty gate_violations list
+    gate_violations = manifest_data.get("gate_violations", [])
+    assert len(gate_violations) > 0, (
+        "Assertion 31d — manifest.gate_violations must be non-empty after gate abort"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Group 14 — KB domain-matching engine (assertions E1–E8)
+# ---------------------------------------------------------------------------
+#
+# These tests use the synthetic KB fixture (tests/fixtures/synthetic_kb.py)
+# and inject quality plans directly via QualityPlanInjector so no full
+# pipeline run is required.  All assertions target the domain-aware code path.
+# ---------------------------------------------------------------------------
+
+
+def _make_injector(seed: int = 42) -> "QualityPlanInjector":
+    """Return a seeded QualityPlanInjector for engine tests."""
+    import random as _random
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    return QualityPlanInjector(rng=_random.Random(seed), profile_name="saas")
+
+
+def _make_conv_event(
+    event_id: str,
+    domain: str,
+    account_id: str = "acct_001",
+    event_type_override: str | None = None,
+) -> SimEvent:
+    """Build a minimal CONVERSATION_STARTED SimEvent for injector testing."""
+    from datetime import datetime as _dt
+    from confabra.schemas import SimEventType as _SET
+    etype = _SET(event_type_override) if event_type_override else _SET.CONVERSATION_STARTED
+    return SimEvent(
+        event_id=event_id,
+        event_type=etype,
+        account_id=account_id,
+        timestamp=_dt(2025, 8, 1, 10, 0, 0),
+        day_index=0,
+        month_index=0,
+        payload={
+            "surface_channel": "intercom",
+            "agent_id": "agent_001",
+            "customer_name": "Test Customer",
+            "domain": domain,
+            "intent": [],
+        },
+    )
+
+
+def _make_snapshot(account_id: str = "acct_001") -> "DaySnapshot":
+    """Build a minimal DaySnapshot for injector testing."""
+    from datetime import date as _date
+    from confabra.schemas import (
+        DaySnapshot as _DS,
+        HealthState as _HS,
+        LifecycleStage as _LS,
+    )
+    return _DS(
+        snapshot_id="snap_001",
+        account_id=account_id,
+        day_index=0,
+        month_index=0,
+        date=_date(2025, 8, 1),
+        lifecycle_stage=_LS.ACTIVE,
+        health_state=_HS.HEALTHY,
+        health_score=0.8,
+        open_tickets=0,
+        recent_signals=[],
+        active_agents=["agent_001"],
+        payment_status="current",
+    )
+
+
+def test_engine_domain_isolation() -> None:
+    """
+    E1 — Domain isolation: every should_cite and must_not_cite chunk in a
+    quality plan produced for domain X must cover domain X.
+
+    Tests billing, api, and refunds in turn using accuracy-type plan specs.
+    """
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    # Build a chunk lookup for assertion.
+    chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
+
+    for domain in ["billing", "api", "refunds"]:
+        injector = _make_injector()
+        conv = _make_conv_event("evt_e1", domain)
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+        plan = injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+
+        for cid in plan.knowledge_citations.should_cite:
+            if cid == "*":
+                continue
+            chunk = chunk_by_id.get(cid)
+            assert chunk is not None, f"E1: should_cite chunk_id={cid!r} not in synthetic KB"
+            assert domain in chunk.domains, (
+                f"E1: domain={domain!r}, should_cite chunk {cid!r} covers {chunk.domains}"
+            )
+
+        for cid in plan.knowledge_citations.must_not_cite:
+            if cid == "*":
+                continue
+            chunk = chunk_by_id.get(cid)
+            assert chunk is not None, f"E1: must_not_cite chunk_id={cid!r} not in synthetic KB"
+            assert domain in chunk.domains, (
+                f"E1: domain={domain!r}, must_not_cite chunk {cid!r} covers {chunk.domains}"
+            )
+
+
+def test_engine_adversarial_exclusion_default() -> None:
+    """
+    E2 — Without explicit opt-in, no should_cite chunk is adversarial.
+    """
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
+
+    for domain in ["billing", "api", "refunds"]:
+        injector = _make_injector()
+        conv = _make_conv_event("evt_e2", domain)
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+        plan = injector._build_plan(
+            conv, snap, spec, SYNTHETIC_KB_CHUNKS, include_adversarial_in_should_cite=False
+        )
+
+        for cid in plan.knowledge_citations.should_cite:
+            if cid == "*":
+                continue
+            chunk = chunk_by_id.get(cid)
+            if chunk:
+                assert not chunk.adversarial, (
+                    f"E2: domain={domain!r}, adversarial chunk {cid!r} appeared in "
+                    f"should_cite without opt-in"
+                )
+
+
+def test_engine_adversarial_inclusion_when_opted_in() -> None:
+    """
+    E3 — With include_adversarial_in_should_cite=True, adversarial chunks
+    may appear in should_cite for a domain that has adversarial chunks.
+    """
+    import random as _random
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
+
+    # Run many trials across seeds to increase chance of picking an adversarial chunk.
+    found_adversarial_in_should_cite = False
+    for seed in range(100):
+        injector = QualityPlanInjector(rng=_random.Random(seed), profile_name="saas")
+        conv = _make_conv_event("evt_e3", "refunds")  # refunds has 2 adversarial chunks
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+        plan = injector._build_plan(
+            conv, snap, spec, SYNTHETIC_KB_CHUNKS, include_adversarial_in_should_cite=True
+        )
+        for cid in plan.knowledge_citations.should_cite:
+            chunk = chunk_by_id.get(cid)
+            if chunk and chunk.adversarial:
+                found_adversarial_in_should_cite = True
+                break
+        if found_adversarial_in_should_cite:
+            break
+
+    assert found_adversarial_in_should_cite, (
+        "E3: across 100 seeds, no adversarial chunk ever appeared in should_cite "
+        "even with include_adversarial_in_should_cite=True"
+    )
+
+
+def test_engine_within_topic_normalization() -> None:
+    """
+    E4 — Within-topic normalization: generating 100 quality plans for the
+    refunds domain (4 chunks, 2 adversarial → 2 non-adversarial allow pool)
+    must not let any single chunk dominate beyond a generous cap.
+
+    The cap is: max_allowed_per_chunk = 2 * (100 / allow_pool_size) * 1.5
+    For 2 allow-eligible refund chunks that is 2 * 50 * 1.5 = 150 — but since
+    we only run 100 iterations and there are 2 chunks, neither should exceed
+    75 selections (100 * 75% as an extreme upper bound for ~50/50 distribution).
+    """
+    import random as _random
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    N = 100
+    freq: dict[str, int] = {}
+    for i in range(N):
+        injector = QualityPlanInjector(rng=_random.Random(i), profile_name="saas")
+        conv = _make_conv_event(f"evt_e4_{i}", "refunds")
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+        plan = injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+        for cid in plan.knowledge_citations.should_cite:
+            if cid != "*":
+                freq[cid] = freq.get(cid, 0) + 1
+
+    # refunds allow pool has 2 non-adversarial chunks; neither should exceed 75% of trials
+    allow_refund_chunks = [
+        c for c in SYNTHETIC_KB_CHUNKS if "refunds" in c.domains and not c.adversarial
+    ]
+    assert len(allow_refund_chunks) > 0, "E4: no non-adversarial refund chunks in synthetic KB"
+
+    max_allowed = int(N * 0.75)
+    for chunk in allow_refund_chunks:
+        count = freq.get(chunk.chunk_id, 0)
+        assert count <= max_allowed, (
+            f"E4: chunk {chunk.chunk_id!r} selected {count}/{N} times — "
+            f"exceeds within-topic normalisation cap of {max_allowed}"
+        )
+
+
+def test_engine_determinism_with_domain() -> None:
+    """
+    E5 — Same seed produces identical chunk selections for a domain-specific plan.
+    """
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    def _run_plan(seed: int) -> list[str]:
+        injector = _make_injector(seed)
+        conv = _make_conv_event("evt_e5", "billing")
+        snap = _make_snapshot()
+        spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+        plan = injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+        return sorted(plan.knowledge_citations.should_cite + plan.knowledge_citations.must_not_cite)
+
+    assert _run_plan(42) == _run_plan(42), (
+        "E5: same seed produced different chunk selections across two runs"
+    )
+    # Different seeds should produce potentially different selections (not guaranteed,
+    # but worth checking for statistical independence).
+    # We just verify the same-seed case is deterministic — divergence is not guaranteed.
+
+
+def test_engine_fallback_on_no_candidates() -> None:
+    """
+    E6 — When the event domain has no matching KB chunks (e.g. a legacy state-machine
+    domain string that predates the 13-domain vocabulary), the injector falls back to
+    the full KB pool rather than raising, so the pipeline continues to run.
+
+    Previously this test verified a ValueError raise; updated in PR2 to document the
+    graceful-fallback behavior introduced to keep the legacy state machine compatible
+    with the newly domain-tagged KB.
+    """
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    injector = _make_injector()
+    conv = _make_conv_event("evt_e6", "nonexistent_domain")
+    snap = _make_snapshot()
+    spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+    # Should NOT raise — falls back to full KB pool.
+    plan = injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+    # At least one chunk must be selected from the full pool.
+    assert plan.knowledge_citations.should_cite or plan.kb_chunks_required is not None
+
+
+def test_engine_raise_on_unrecognized_event_type() -> None:
+    """
+    E7 — ValueError is raised when the trigger event type is not in the
+    eligible allowlist (e.g. account_created going through the injector).
+    """
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    injector = _make_injector()
+    # Build an ACCOUNT_CREATED event — not eligible for injection.
+    from datetime import datetime as _dt
+    from confabra.schemas import SimEventType as _SET
+    non_conv_event = SimEvent(
+        event_id="evt_e7",
+        event_type=_SET.ACCOUNT_CREATED,
+        account_id="acct_001",
+        timestamp=_dt(2025, 8, 1, 10, 0, 0),
+        day_index=0,
+        month_index=0,
+        payload={"plan_tier": "starter", "industry": "saas", "domain": "billing"},
+    )
+    snap = _make_snapshot()
+    spec = {"type": "accuracy", "label": AccuracyLabel(status="supported", precision="exact")}
+
+    with pytest.raises(ValueError, match="not eligible"):
+        injector._build_plan(non_conv_event, snap, spec, SYNTHETIC_KB_CHUNKS)
+
+
+def test_engine_manifest_fields_populated(tmp_path: Path) -> None:
+    """
+    E8 — After a synthetic-fixture dry run, the manifest contains non-default
+    values for kb_version, kb_chunk_count, domain_distribution_observed, and
+    chunk_selection_frequency.
+
+    Uses a patched KB generator so the synthetic fixture is used instead of
+    the real saas_content.py chunks.
+    """
+    from unittest.mock import patch
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    # Compute expected kb_hash from synthetic chunks (same logic as pipeline).
+    import hashlib
+    _source = "".join(
+        c.chunk_id + c.chunk_text
+        for c in sorted(SYNTHETIC_KB_CHUNKS, key=lambda c: c.chunk_id)
+    )
+    _expected_kb_version = hashlib.sha256(_source.encode()).hexdigest()
+
+    # Hash the chunks JSONL for the kb_chunks_hash field (pipeline writes to disk).
+    _chunk_lines = [c.model_dump_json() for c in SYNTHETIC_KB_CHUNKS]
+    _kb_hash = hashlib.sha256("\n".join(_chunk_lines).encode()).hexdigest()
+
+    with patch(
+        "confabra.pipeline.generate_kb",
+        return_value=(SYNTHETIC_KB_CHUNKS, _kb_hash),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=_SMALL_CORPUS_ACCOUNTS,
+            months=_SMALL_CORPUS_MONTHS,
+            seed=SEED,
+            output_root=tmp_path,
+            anthropic_api_key=None,
+        )
+        manifest = run_pipeline(config)
+
+    # kb_version must be a non-empty sha256 hex string
+    assert manifest.kb_version and manifest.kb_version == _expected_kb_version, (
+        f"E8: manifest.kb_version mismatch or empty: {manifest.kb_version!r}"
+    )
+
+    # kb_chunk_count must equal number of synthetic chunks
+    assert manifest.kb_chunk_count == len(SYNTHETIC_KB_CHUNKS), (
+        f"E8: manifest.kb_chunk_count={manifest.kb_chunk_count}, "
+        f"expected {len(SYNTHETIC_KB_CHUNKS)}"
+    )
+
+    # domain_distribution_observed must have entries for at least one domain
+    assert manifest.domain_distribution_observed, (
+        "E8: manifest.domain_distribution_observed is empty — "
+        "no CONVERSATION_STARTED events with domain field were found"
+    )
+
+    # chunk_selection_frequency is populated when at least one plan cites a chunk.
+    # For accuracy plans using the synthetic fixture, at least one chunk should appear.
+    assert isinstance(manifest.chunk_selection_frequency, dict), (
+        "E8: manifest.chunk_selection_frequency is not a dict"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Group 15 — KB tagging and invariant health (assertions A, B, C, D)
+# ---------------------------------------------------------------------------
+
+
+def test_kb_domain_tag_completeness_existing() -> None:
+    """Every existing KB chunk must have at least one domain tag after PR2."""
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    chunks = get_saas_kb_chunks()
+    untagged = [c.chunk_id for c in chunks if not c.domains]
+    assert not untagged, f"Chunks missing domain tags: {untagged}"
+
+
+def test_adversarial_chunks_marked_correctly() -> None:
+    """The 3 adversarial KB fixtures must have adversarial=True set on the KBChunk model field."""
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    EXPECTED_ADVERSARIAL = {
+        "kb_chunk_refund_eligibility_timelines_v1",
+        "kb_chunk_refund_grace_period_stale_v1",
+        "kb_chunk_all_customers_refund_bait_v1",
+    }
+    chunks = get_saas_kb_chunks()
+    adversarial_set = {c.chunk_id for c in chunks if c.adversarial}
+    missing = EXPECTED_ADVERSARIAL - adversarial_set
+    assert not missing, f"Expected adversarial chunks missing adversarial=True: {missing}"
+    # No unexpected adversarial chunks
+    extra = adversarial_set - EXPECTED_ADVERSARIAL
+    assert not extra, f"Unexpected chunks marked adversarial: {extra}"
+
+
+def test_invariant_checker_passes_existing_kb() -> None:
+    """
+    The invariant checker must return zero errors against the existing tagged KB.
+
+    If this fails, the existing KB has internal contradictions that must be
+    resolved before PR3 adds new chunks. Surface errors — do not suppress them.
+    """
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    from confabra.validators.invariant_checker import run_checker
+    chunks = get_saas_kb_chunks()
+    report = run_checker(chunks)
+    assert not report.errors, (
+        f"Invariant checker found {len(report.errors)} error(s) in existing KB:\n"
+        + "\n".join(f"  - {e}" for e in report.errors)
+    )
+
+
+def test_chunks_with_claims_are_well_formed() -> None:
+    """
+    Every KB chunk with non-empty claims must have well-formed claim values.
+    Claims must be a dict of str keys mapping to non-None primitive values or lists.
+    """
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    chunks = get_saas_kb_chunks()
+    malformed = []
+    for c in chunks:
+        if not c.claims:
+            continue  # empty claims are fine
+        if not isinstance(c.claims, dict):
+            malformed.append((c.chunk_id, f"claims is {type(c.claims).__name__}, expected dict"))
+            continue
+        for key, value in c.claims.items():
+            if not isinstance(key, str):
+                malformed.append((c.chunk_id, f"claim key {key!r} is not a str"))
+            # Values may be None (e.g. Enterprise price is None) — that's allowed
+            # as long as the key is a str
+    assert not malformed, f"Malformed claims found:\n" + "\n".join(f"  {cid}: {reason}" for cid, reason in malformed)

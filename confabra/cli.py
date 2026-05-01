@@ -475,3 +475,35 @@ def stats(corpus_dir: Path, profile: str) -> None:
         _row(label, h[:16] + "…" if len(h) > 16 else h)
 
     console.print(Panel(table, title=f"[bold]Corpus Stats — {profile}[/bold]", border_style="cyan"))
+
+
+# ---------------------------------------------------------------------------
+# check-invariants
+# ---------------------------------------------------------------------------
+
+
+@cli.command("check-invariants")
+@click.option("--profile", default="saas", show_default=True, help="Profile name to load KB chunks from.")
+def check_invariants_cmd(profile: str) -> None:
+    """Run the KB invariant checker against the named profile's knowledge base."""
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    from confabra.validators.invariant_checker import run_checker
+
+    if profile != "saas":
+        console.print(f"[red]Unknown profile: {profile!r}. Only 'saas' is supported.[/red]")
+        raise SystemExit(1)
+
+    chunks = get_saas_kb_chunks()
+    report = run_checker(chunks)
+
+    if report.warnings:
+        for w in report.warnings:
+            console.print(f"[yellow]WARNING:[/yellow] {w}")
+
+    if report.errors:
+        for e in report.errors:
+            console.print(f"[red]ERROR:[/red] {e}")
+        console.print(f"\n[red]Invariant check FAILED — {len(report.errors)} error(s).[/red]")
+        raise SystemExit(1)
+
+    console.print(f"[green]Invariant check PASSED — 0 errors, {len(report.warnings)} warning(s).[/green]")

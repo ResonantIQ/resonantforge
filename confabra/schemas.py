@@ -114,6 +114,22 @@ class DaySnapshot(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ConversationStartedPayload(BaseModel):
+    """
+    Typed payload for CONVERSATION_STARTED simulation events.
+
+    ``domain`` (single-valued) drives KB chunk selection at injection time.
+    ``intent`` (multi-valued) is topic metadata about what the customer is
+    trying to accomplish and is available for downstream analytics.
+    """
+
+    surface_channel: str
+    customer_name: str
+    agent_id: str
+    domain: str  # e.g. "billing", "api", "refunds"
+    intent: list[str] = Field(default_factory=list)  # e.g. ["how_to", "feature_request"]
+
+
 class ConversationRecord(BaseModel):
     """
     A generated customer-support conversation with metadata.
@@ -221,6 +237,14 @@ class KBChunk(BaseModel):
     Chunk IDs are deterministic (e.g. ``kb_chunk_refund_policy_v3``) so that
     quality plans and validation results can reference them by stable key across
     corpus regeneration runs with the same seed.
+
+    ``domains`` drives KB selection: the injector filters candidates to chunks
+    where the conversation's domain appears in this list. Empty means the chunk
+    is not yet tagged and falls through to legacy selection logic.
+
+    ``adversarial`` marks chunks that are intentional traps (overgeneralisations,
+    stale policies, keyword-match bait). They default to ``must_not_cite`` and
+    can only enter ``should_cite`` when the caller explicitly opts in.
     """
 
     chunk_id: str  # deterministic: kb_chunk_refund_policy_v3 style
@@ -233,6 +257,9 @@ class KBChunk(BaseModel):
     counterintuitive: bool = False
     cat11_gate: Optional[str] = None  # which gate this chunk supports
     tone_variant: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
+    domains: list[str] = Field(default_factory=list)  # topic domains this chunk covers
+    adversarial: bool = False  # opt-in required to include in should_cite
+    claims: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -374,6 +401,28 @@ class ValidationVerdict(str, Enum):
     SKIP = "skip"
 
 
+class GateSeverity(str, Enum):
+    """Severity of a quality gate violation."""
+
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class GateViolation(BaseModel):
+    """
+    Structured record of a single quality gate violation from SkipRateTracker.check_gates().
+
+    WARNING violations are logged but do not abort the run.
+    ERROR violations cause the pipeline to raise RuntimeError after writing the manifest.
+    """
+
+    gate_name: str
+    severity: GateSeverity
+    actual_value: float
+    threshold: float
+    message: str
+
+
 class DimensionVerdict(BaseModel):
     """
     Verdict for a single scoring dimension within a validation run.
@@ -403,6 +452,27 @@ class ValidationResult(BaseModel):
     dimension_verdicts: list[DimensionVerdict]
     skip_reason: Optional[str] = None
     retry_count: int = 0
+
+
+class SkippedConversationRecord(BaseModel):
+    """
+    Records full context for a conversation skipped after exhausting prose retries.
+
+    Written to skipped_conversations.jsonl so rejected conversations can be
+    debugged without re-running the pipeline.  All fields are present for
+    POST-GEN SKIP paths; pre-prompt and API-error skips may have None prose
+    and empty verdicts.
+    """
+
+    conversation_id: str
+    account_id: str
+    event_id: Optional[str]
+    quality_plan_summary: Optional[dict[str, Any]]
+    final_retry_count: int
+    final_verdicts: list[dict[str, Any]]
+    agent_prose_snippet: Optional[str]
+    kb_chunks_required: Optional[list[str]]
+    timestamp: str
 
 
 class DisagreementRecord(BaseModel):
@@ -653,6 +723,19 @@ class Manifest(BaseModel):
     prose_fact_violation_rate: float
     validator_rule_failure_rate: float
     disagreement_rate: float
+    # Prompt cache telemetry (Anthropic ephemeral caching)
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_hit_rate: float = 0.0
+    cache_estimated_savings_usd: float = 0.0
+    # Gate abort fields — populated when a hard gate fires and the run is aborted
+    gate_aborted: bool = False
+    gate_violations: list[dict[str, Any]] = Field(default_factory=list)
+    # KB domain telemetry — populated after Phase 5 when domain-tagged chunks are used
+    kb_version: str = ""  # sha256 of sorted chunk_ids + chunk_text
+    kb_chunk_count: int = 0  # mirrors knowledge_base_chunk_count; kept for API symmetry
+    domain_distribution_observed: dict[str, int] = Field(default_factory=dict)
+    chunk_selection_frequency: dict[str, int] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

@@ -1,11 +1,15 @@
 """Quality plan injector — plants rubric-dimension targets into the organic event log."""
 
+import math
 import random
 from confabra.schemas import (
-    QualityPlan, RubricTarget, AccuracyLabel, KnowledgeCitations,
-    SimEvent, SimEventType, DaySnapshot, LifecycleStage
+    ConstraintType, KBChunk, QualityPlan, RubricTarget, AccuracyLabel,
+    KnowledgeCitations, SimEvent, SimEventType, DaySnapshot, LifecycleStage,
 )
 from confabra.layer1.plan_validator import PlanValidator
+
+# Event types eligible for QualityPlan injection.  Raise ValueError on others.
+_ELIGIBLE_EVENT_TYPES = {SimEventType.CONVERSATION_STARTED}
 
 # Accuracy label distribution
 ACCURACY_DISTRIBUTION = [
@@ -172,7 +176,8 @@ class QualityPlanInjector:
         events: list[SimEvent],
         snapshots: list[DaySnapshot],
         planted_count: int = 50,
-        kb_chunk_ids: list[str] | None = None,
+        kb_chunks: list[KBChunk] | None = None,
+        include_adversarial_in_should_cite: bool = False,
     ) -> list[QualityPlan]:
         """
         Pick conversations from the event log and generate quality plans.
@@ -187,20 +192,18 @@ class QualityPlanInjector:
             events:        Full organic event log from the state machine.
             snapshots:     Full snapshot log from the snapshot emitter.
             planted_count: Target number of planted conversations (50 for SaaS, 15 for PS).
-            kb_chunk_ids:  Available KB chunk IDs; defaults to four placeholder IDs that
-                           will be replaced by real KB fixture IDs in Phase 2.
+            kb_chunks:     Available KBChunk objects from the KB generator.  When any
+                           chunk carries a non-empty ``domains`` list the injector uses
+                           domain-based filtering; otherwise it falls back to legacy
+                           non-adversarial / deny-chunk heuristics.
+            include_adversarial_in_should_cite:
+                           When True, adversarial chunks may appear in ``should_cite``
+                           in addition to ``must_not_cite``.  Default False.
 
         Returns:
             List of QualityPlan records, one per accepted planted conversation.
         """
-        # Default KB chunk IDs if not provided (real values come from KB generator in Phase 2)
-        if kb_chunk_ids is None:
-            kb_chunk_ids = [
-                "kb_chunk_refund_policy_v3",
-                "kb_chunk_sla_terms_v1",
-                "kb_chunk_onboarding_v2",
-                "kb_chunk_refund_deny_usage_v1",  # deny_condition chunk
-            ]
+        chunks: list[KBChunk] = kb_chunks if kb_chunks is not None else []
 
         # Build snapshot lookup: account_id → snapshots
         snaps_by_account: dict[str, list[DaySnapshot]] = {}
@@ -238,7 +241,13 @@ class QualityPlanInjector:
                 account_snaps[-1] if account_snaps else None
             )
 
-            plan = self._build_plan(conv_event, account_snap, plan_spec, kb_chunk_ids)
+            plan = self._build_plan(
+                conv_event,
+                account_snap,
+                plan_spec,
+                chunks,
+                include_adversarial_in_should_cite=include_adversarial_in_should_cite,
+            )
 
             # Pre-validate (soft check — we log but don't hard-abort in injector)
             if account_snap:
@@ -303,7 +312,9 @@ class QualityPlanInjector:
         conv_event: SimEvent,
         account_snap: DaySnapshot | None,
         spec: dict,
-        kb_chunk_ids: list[str],
+        kb_chunks: list[KBChunk],
+        *,
+        include_adversarial_in_should_cite: bool = False,
     ) -> QualityPlan:
         """
         Build a single QualityPlan from a plan specification dict.
@@ -313,19 +324,97 @@ class QualityPlanInjector:
         is deterministic: it embeds the trigger event ID so plans are traceable
         back to specific simulation events without a separate index.
 
+        When the KB is domain-tagged (any chunk has ``domains`` set), chunks are
+        filtered to ``event.domain`` candidates before allow/deny splitting.
+        Otherwise falls back to the legacy ``"deny" in chunk_id`` heuristic so
+        existing tests pass against untagged KB content.
+
         Args:
             conv_event:   The CONVERSATION_STARTED event this plan targets.
             account_snap: The DaySnapshot for the account on the conversation day,
                           or None if no snapshot exists for that day.
             spec:         Plan specification dict produced by ``_build_schedule``.
-            kb_chunk_ids: Available KB chunk IDs for citation constraints.
+            kb_chunks:    Available KBChunk objects.
+            include_adversarial_in_should_cite:
+                          When True adversarial chunks may land in should_cite.
 
         Returns:
             A fully-populated QualityPlan ready for pre-prompt validation.
+
+        Raises:
+            ValueError: if the event type is not in the eligible allowlist.
+            ValueError: if domain is missing from a domain-aware event.
+            ValueError: if no KB candidates exist for the event's domain (domain-aware KB only).
         """
-        # Pick KB chunks for this plan
-        allow_chunks = [c for c in kb_chunk_ids if "deny" not in c][:2]
-        deny_chunks = [c for c in kb_chunk_ids if "deny" in c][:1]
+        # --- Allowlist check ---
+        if conv_event.event_type not in _ELIGIBLE_EVENT_TYPES:
+            raise ValueError(
+                f"Event type '{conv_event.event_type}' is not eligible for QualityPlan "
+                f"injection.  Allowed types: {_ELIGIBLE_EVENT_TYPES}"
+            )
+
+        # --- Domain-aware KB selection ---
+        domain_aware = any(c.domains for c in kb_chunks) if kb_chunks else False
+
+        if domain_aware:
+            domain = conv_event.payload.get("domain", "")
+            if not domain:
+                raise ValueError(
+                    f"Event {conv_event.event_id}: 'domain' missing from payload "
+                    f"but KB is domain-tagged — injection cannot proceed."
+                )
+            domain_candidates = [c for c in kb_chunks if domain in c.domains]
+            if not domain_candidates:
+                # Legacy state machine emits domain strings ('api', 'billing', 'refunds')
+                # that predate the 13-domain vocabulary. Fall back to the full KB pool
+                # until PR3 updates the state machine to emit vocabulary-aligned strings.
+                domain_candidates = list(kb_chunks)
+
+            # Split into allow pool (non-adversarial) and deny pool.
+            # DENY_CONDITION chunks are always deny-pool regardless of adversarial flag.
+            deny_pool = [
+                c for c in domain_candidates
+                if c.adversarial or c.constraint_type == ConstraintType.DENY_CONDITION
+            ]
+            allow_pool = [c for c in domain_candidates if c not in deny_pool]
+
+            # Within-topic normalization: cap the pick pool so chunk-count-rich domains
+            # don't dominate selection diversity across the corpus.
+            if include_adversarial_in_should_cite:
+                # When opted in, adversarial chunks compete for should_cite slots too.
+                # Cap applies to ALL domain candidates.
+                pick_pool = sorted(domain_candidates, key=lambda c: c.chunk_id)
+                cap = max(3, math.ceil(math.sqrt(len(pick_pool))))
+                pick_pool_capped = pick_pool[:cap]
+                deny_pool_for_must_not: list[KBChunk] = []  # no must_not_cite when opted in
+            else:
+                # Default: only non-adversarial chunks for should_cite;
+                # adversarial/deny chunks go to must_not_cite.
+                pick_pool = sorted(allow_pool, key=lambda c: c.chunk_id)
+                cap = max(3, math.ceil(math.sqrt(len(pick_pool)))) if pick_pool else 3
+                pick_pool_capped = pick_pool[:cap]
+                deny_pool_for_must_not = sorted(deny_pool, key=lambda c: c.chunk_id)
+
+            def _pick_from(pool: list[KBChunk]) -> KBChunk | None:
+                """Seed-based deterministic pick from a sorted candidate pool."""
+                if not pool:
+                    return None
+                idx = self.rng.randint(0, len(pool) - 1)
+                return pool[idx]
+
+            picked = _pick_from(pick_pool_capped)
+            picked_deny_chunk = _pick_from(deny_pool_for_must_not)
+
+            allow_ids = [picked.chunk_id] if picked is not None else []
+            deny_ids: list[str] = [picked_deny_chunk.chunk_id] if picked_deny_chunk is not None else []
+
+            # All domain candidates as chunk_id list for prose directives.
+            all_candidate_ids = [c.chunk_id for c in sorted(domain_candidates, key=lambda c: c.chunk_id)]
+        else:
+            # --- Legacy fallback for untagged KB (e.g. real saas_content.py) ---
+            allow_ids = [c.chunk_id for c in kb_chunks if "deny" not in c.chunk_id and not c.adversarial][:2]
+            deny_ids = [c.chunk_id for c in kb_chunks if "deny" in c.chunk_id or c.adversarial][:1]
+            all_candidate_ids = allow_ids + deny_ids
 
         # Initialise all fields with safe defaults; branches override as needed.
         rubric: RubricTarget
@@ -338,14 +427,14 @@ class QualityPlanInjector:
 
         if spec["type"] == "control":
             rubric = ALL_CLEAN_TARGETS
-            citations = KnowledgeCitations(should_cite=allow_chunks[:1], must_not_cite=[])
+            citations = KnowledgeCitations(should_cite=allow_ids[:1], must_not_cite=[])
             directives = (
                 "Write a model customer service interaction. Agent should be empathetic, resolve the issue completely, "
                 "write on-brand, and make accurate claims supported by the knowledge base."
             )
             cat11_gate = None
             multi_chunk = False
-            kb_required = allow_chunks[:1]
+            kb_required = allow_ids[:1]
             coaching_dim = "empathy"
 
         elif spec["type"] == "empathy":
@@ -386,15 +475,16 @@ class QualityPlanInjector:
                 multi_chunk = False
             elif label.precision == "conditional_applied":
                 # Gate 1: needs allow + deny chunk to test conditional application
-                citations = KnowledgeCitations(should_cite=allow_chunks + deny_chunks, must_not_cite=[])
-                kb_required = allow_chunks + deny_chunks
+                combined = allow_ids + deny_ids
+                citations = KnowledgeCitations(should_cite=combined, must_not_cite=[])
+                kb_required = combined
                 multi_chunk = True
             else:
-                citations = KnowledgeCitations(should_cite=allow_chunks[:1], must_not_cite=deny_chunks)
-                kb_required = allow_chunks[:1]
+                citations = KnowledgeCitations(should_cite=allow_ids[:1], must_not_cite=deny_ids)
+                kb_required = allow_ids[:1]
                 multi_chunk = False
             rubric = RubricTarget(accuracy=label)
-            directives = _prose_directive_for_accuracy(label, kb_chunk_ids[:3])
+            directives = _prose_directive_for_accuracy(label, all_candidate_ids[:3])
             cat11_gate = (
                 "gate_1" if label.precision == "conditional_applied"
                 else "gate_3" if label.precision == "overgeneralized"
