@@ -1827,3 +1827,127 @@ def test_invariant_checker_zero_warnings_existing_kb() -> None:
         f"Invariant checker found {len(report.warnings)} warning(s):\n"
         + "\n".join(f"  - {w}" for w in report.warnings)
     )
+
+
+# ---------------------------------------------------------------------------
+# Group 15 — State machine domain vocabulary (assertions SM1–SM3)
+# ---------------------------------------------------------------------------
+#
+# These tests target the weighted-random domain selection introduced in PR3a.
+# They run the state machine directly (no full pipeline) to avoid LLM costs.
+# ---------------------------------------------------------------------------
+
+_SM_SEED = 7
+_SM_LARGE_ACCOUNTS = 100  # 100 × 6 × 30 × ~0.3 ≈ ~5400 conversation events
+_SM_SMALL_ACCOUNTS = 5   # used for determinism / sequence tests only
+
+
+def _collect_conv_domains(seed: int, accounts: int, months: int) -> list[str]:
+    """Run the state machine and return the domain for each CONVERSATION_STARTED event."""
+    from confabra.layer1.state_machine import StateMachine
+    from confabra.profiles import get_profile
+    from confabra.schemas import SimEventType
+
+    profile = get_profile("saas")
+    sm = StateMachine(seed=seed, num_accounts=accounts, num_months=months, profile=profile)
+    events, _ = sm.simulate()
+    return [
+        e.payload["domain"]
+        for e in events
+        if e.event_type == SimEventType.CONVERSATION_STARTED
+    ]
+
+
+def test_state_machine_all_domains_reachable() -> None:
+    """
+    SM1 — All 13 SaaS domains must appear in CONVERSATION_STARTED events across
+    a 100-account × 6-month run.
+
+    sla_credits is the rarest domain (weight 1/100). With ~5400 conversations the
+    expected count is ~54, so non-appearance would indicate a configuration bug,
+    not bad luck.
+    """
+    from confabra.profiles import get_profile
+
+    profile = get_profile("saas")
+    expected_domains = set(profile.domain_weights().keys())
+
+    domains_seen = set(_collect_conv_domains(_SM_SEED, _SM_LARGE_ACCOUNTS, 6))
+
+    missing = expected_domains - domains_seen
+    assert not missing, (
+        f"SM1 — {len(missing)} domain(s) never appeared in a "
+        f"{_SM_LARGE_ACCOUNTS}-account × 6-month run: {sorted(missing)}"
+    )
+
+
+def test_state_machine_domain_sequence_deterministic() -> None:
+    """
+    SM2 — Two runs with the same seed must produce identical domain sequences.
+
+    Also verifies that two different seeds produce different sequences (a trivial
+    check, but catches accidental global-state mutations in the RNG).
+    """
+    seq_a = _collect_conv_domains(_SM_SEED, _SM_SMALL_ACCOUNTS, 2)
+    seq_b = _collect_conv_domains(_SM_SEED, _SM_SMALL_ACCOUNTS, 2)
+
+    # Assertion SM2a: same seed → identical sequence
+    assert seq_a == seq_b, (
+        f"SM2a — Same seed {_SM_SEED} produced different domain sequences: "
+        f"len(a)={len(seq_a)}, len(b)={len(seq_b)}, "
+        f"first diff at index "
+        f"{next(i for i, (x, y) in enumerate(zip(seq_a, seq_b)) if x != y) if seq_a != seq_b else 'len mismatch'}"
+    )
+
+    # Assertion SM2b: different seeds → different sequences
+    seq_c = _collect_conv_domains(_SM_SEED + 1, _SM_SMALL_ACCOUNTS, 2)
+    assert seq_a != seq_c, (
+        "SM2b — Seeds differing by 1 produced identical domain sequences; "
+        "the RNG is not advancing across seeds as expected"
+    )
+
+
+def test_state_machine_domain_distribution_vs_profile_weights() -> None:
+    """
+    SM3 — Domain frequencies over ~5400 conversations must be within ±5% absolute
+    of the profile's declared weights.
+
+    Tolerance is intentionally generous: the 5% band is much wider than 3σ for
+    any domain with weight ≥1/100, so this test guards against grossly wrong
+    distributions (e.g. weight table mis-keyed) without being brittle to normal
+    stochastic variation.
+    """
+    from confabra.profiles import get_profile
+
+    profile = get_profile("saas")
+    weights = profile.domain_weights()
+    total_weight = sum(weights.values())
+    expected_fraction = {d: w / total_weight for d, w in weights.items()}
+
+    domains = _collect_conv_domains(_SM_SEED, _SM_LARGE_ACCOUNTS, 6)
+    n_total = len(domains)
+    assert n_total >= 1000, (
+        f"SM3 — expected ≥1000 conversation events for meaningful distribution test, "
+        f"got {n_total}. Increase _SM_LARGE_ACCOUNTS."
+    )
+
+    observed_fraction: dict[str, float] = {}
+    for domain in weights:
+        count = sum(1 for d in domains if d == domain)
+        observed_fraction[domain] = count / n_total
+
+    _TOLERANCE = 0.05  # 5% absolute
+    violations: list[str] = []
+    for domain, exp in expected_fraction.items():
+        obs = observed_fraction.get(domain, 0.0)
+        if abs(obs - exp) > _TOLERANCE:
+            violations.append(
+                f"domain={domain!r}: expected≈{exp:.3f}, observed={obs:.3f}, "
+                f"delta={abs(obs - exp):.3f} > tolerance={_TOLERANCE}"
+            )
+
+    assert not violations, (
+        f"SM3 — domain distribution outside ±{_TOLERANCE:.0%} tolerance "
+        f"({n_total} total conversations):\n"
+        + "\n".join(f"  {v}" for v in violations)
+    )
