@@ -1705,6 +1705,81 @@ def test_tier_vocab_compound_word_not_flagged() -> None:
     assert not tier_errors, f"Compound words must not flag tier-vocab errors. Got: {tier_errors}"
 
 
+def test_tier_vocab_premium_support_not_flagged() -> None:
+    """'premium support' must not flag — 'support' is not a tier-context word."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_premium_support",
+        chunk_text="Priority support and premium support options are available for all plans.",
+    )
+    report = run_checker([chunk])
+    tier_errors = [e for e in report.errors if "non-canonical tier" in e]
+    assert not tier_errors, f"'premium support' must not flag. Got: {tier_errors}"
+
+
+def test_tier_vocab_free_trial_not_flagged() -> None:
+    """'a free trial' must not flag — 'trial' is not a tier-context word."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_free_trial",
+        chunk_text="A free trial is available for 14 days before committing to a paid plan.",
+    )
+    report = run_checker([chunk])
+    tier_errors = [e for e in report.errors if "non-canonical tier" in e]
+    assert not tier_errors, f"'free trial' must not flag. Got: {tier_errors}"
+
+
+def test_tier_vocab_basic_understanding_not_flagged() -> None:
+    """'basic understanding' must not flag — non-tier usage of 'basic'."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_basic_understanding",
+        chunk_text="A basic understanding of REST APIs is recommended before using this feature.",
+    )
+    report = run_checker([chunk])
+    tier_errors = [e for e in report.errors if "non-canonical tier" in e]
+    assert not tier_errors, f"'basic understanding' must not flag. Got: {tier_errors}"
+
+
+def test_tier_vocab_standard_or_enterprise_flags() -> None:
+    """'Standard or Enterprise' (no Growth in between) must flag 'Standard'."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_standard_or_enterprise",
+        chunk_text="This feature is available on Standard or Enterprise plans.",
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for 'Standard or Enterprise' — list context with canonical tier"
+
+
+def test_tier_vocab_pro_pricing_flags() -> None:
+    """'Pro pricing' must flag — 'Pro' before a tier-context word."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_pro_pricing",
+        chunk_text="Pro pricing applies to this feature and includes all advanced options.",
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for 'Pro pricing' — non-canonical tier before 'pricing'"
+
+
+def test_tier_vocab_lowercase_standard_plan_flags() -> None:
+    """'the standard plan' (lowercase) must flag — case drift on non-canonical name."""
+    from confabra.validators.invariant_checker import run_checker
+
+    chunk = _make_chunk(
+        chunk_id="test_tier_text_lowercase_standard_plan",
+        chunk_text="If you are on the standard plan, you receive 1,000 API calls per minute.",
+    )
+    report = run_checker([chunk])
+    assert report.errors, "Expected error for lowercase 'standard plan'"
+
+
 def test_tier_vocab_canonical_names_not_flagged() -> None:
     """Text 'available on Starter, Growth, and Enterprise' must not flag."""
     from confabra.validators.invariant_checker import run_checker
