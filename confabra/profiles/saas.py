@@ -8,6 +8,10 @@ from confabra.schemas import BrandVoiceVariant, CoachingStyleOverlay, KBChunk
 from confabra.profiles.lexicons import saas as saas_lex
 from confabra.kb.saas_content import get_saas_kb_chunks
 
+# Canonical plan-tier names for this profile. Detectors, validators, and the
+# invariant checker all import from here — never hardcode tier names elsewhere.
+CANONICAL_TIER_NAMES: frozenset[str] = frozenset({"Starter", "Growth", "Enterprise"})
+
 
 class SaaSProfile(Profile):
     """
