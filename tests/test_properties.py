@@ -1076,6 +1076,310 @@ def test_gate_warning_does_not_abort() -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Group 14 — Satisfiability pre-check (RFORGE-11, assertions 32–36)
+# ---------------------------------------------------------------------------
+
+
+def test_chunk_satisfies_intent_empty_tags_matches_any() -> None:
+    """
+    Assertion 32: a chunk with intent_tags=[] (the default) must return True for
+    any event intent, including an empty list.
+
+    This validates the backward-compatibility guarantee: all pre-RFORGE-11 chunks
+    that have no intent_tags are eligible for any event regardless of its intent.
+    """
+    from confabra.layer1.quality_plan_injector import _chunk_satisfies_intent
+
+    # Build a minimal KBChunk with no intent_tags (the default).
+    chunk = KBChunk(
+        chunk_id="kb_chunk_test_empty_tags_v1",
+        document_id="doc_test_v1",
+        document_path="test/doc.md",
+        chunk_text="Test chunk content.",
+        domains=["technical_issue"],
+        intent_tags=[],  # explicit default — should match anything
+    )
+
+    # Assertion 32a: matches specific intent
+    assert _chunk_satisfies_intent(chunk, ["api_usage_question"]) is True, (
+        "Assertion 32a — chunk with intent_tags=[] must match intent=['api_usage_question']"
+    )
+    # Assertion 32b: matches different specific intent
+    assert _chunk_satisfies_intent(chunk, ["webhook_configuration"]) is True, (
+        "Assertion 32b — chunk with intent_tags=[] must match intent=['webhook_configuration']"
+    )
+    # Assertion 32c: matches empty intent list
+    assert _chunk_satisfies_intent(chunk, []) is True, (
+        "Assertion 32c — chunk with intent_tags=[] must match empty event intent list"
+    )
+    # Assertion 32d: matches multi-value intent list
+    assert _chunk_satisfies_intent(chunk, ["bug_report", "escalation"]) is True, (
+        "Assertion 32d — chunk with intent_tags=[] must match multi-value intent list"
+    )
+
+
+def test_chunk_satisfies_intent_tag_intersection() -> None:
+    """
+    Assertion 33: a chunk with intent_tags=["webhook_configuration"] must match
+    events whose intent includes "webhook_configuration" and must NOT match events
+    with a different intent like "api_usage_question".
+
+    This validates the core filtering behavior: tagged chunks are only eligible when
+    the event's intent overlaps with the chunk's declared topic.
+    """
+    from confabra.layer1.quality_plan_injector import _chunk_satisfies_intent
+
+    chunk = KBChunk(
+        chunk_id="kb_chunk_ti_webhook_error_allow_deny_v1",
+        document_id="doc_technical_support_v1",
+        document_path="product_docs/technical_support.md",
+        chunk_text="Webhook Dead Letter log access content.",
+        domains=["technical_issue", "api_and_webhooks"],
+        intent_tags=["webhook_configuration"],
+    )
+
+    # Assertion 33a: matching intent passes
+    assert _chunk_satisfies_intent(chunk, ["webhook_configuration"]) is True, (
+        "Assertion 33a — chunk tagged webhook_configuration must match "
+        "intent=['webhook_configuration']"
+    )
+    # Assertion 33b: non-matching intent fails
+    assert _chunk_satisfies_intent(chunk, ["api_usage_question"]) is False, (
+        "Assertion 33b — chunk tagged webhook_configuration must NOT match "
+        "intent=['api_usage_question']"
+    )
+    # Assertion 33c: empty intent fails when tags are non-empty
+    assert _chunk_satisfies_intent(chunk, []) is False, (
+        "Assertion 33c — chunk with non-empty intent_tags must NOT match empty event intent"
+    )
+    # Assertion 33d: intersection match — intent list contains the tag alongside other values
+    assert _chunk_satisfies_intent(chunk, ["bug_report", "webhook_configuration"]) is True, (
+        "Assertion 33d — chunk tagged webhook_configuration must match a multi-value intent "
+        "list that includes the tag"
+    )
+
+
+def test_satisfiability_check_retries_on_mismatch() -> None:
+    """
+    Assertion 34: when the first RNG pick returns a tagged chunk that does not
+    match the event's intent, the injector must retry and select a different chunk.
+
+    We construct a pool where the first alphabetically selected chunk is tagged
+    with "webhook_configuration" and a second chunk has no intent_tags (so it
+    matches any intent).  With event intent=["api_usage_question"], the injector
+    must not select the webhook chunk and must eventually pick the untagged chunk.
+    """
+    import random as _random
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from datetime import datetime, timezone as _tz
+
+    # Webhook chunk — will fail the satisfiability check for api_usage_question.
+    webhook_chunk = KBChunk(
+        chunk_id="kb_chunk_aa_webhook_narrow_v1",  # "aa" prefix → sorts first alphabetically
+        document_id="doc_test_v1",
+        document_path="test/doc.md",
+        chunk_text="Webhook specific content.",
+        domains=["api_and_webhooks"],
+        intent_tags=["webhook_configuration"],
+    )
+    # General chunk — no intent_tags → matches any intent.
+    general_chunk = KBChunk(
+        chunk_id="kb_chunk_bb_general_api_v1",  # "bb" prefix → sorts second alphabetically
+        document_id="doc_test_v1",
+        document_path="test/doc.md",
+        chunk_text="General API content.",
+        domains=["api_and_webhooks"],
+        intent_tags=[],
+    )
+
+    # Event with api_usage_question intent — should NOT trigger the webhook chunk.
+    event = SimEvent(
+        event_id="evt_rforge11_test_34",
+        event_type="conversation_started",
+        account_id="acct_test",
+        agent_id="agent_test",
+        timestamp=datetime(2026, 1, 1, 10, 0, tzinfo=_tz.utc),
+        day_index=0,
+        month_index=0,
+        payload={
+            "domain": "api_and_webhooks",
+            "intent": ["api_usage_question"],
+            "surface_channel": "intercom",
+            "customer_name": "Test Customer",
+            "agent_id": "agent_test",
+        },
+    )
+
+    rng = _random.Random(42)
+    injector = QualityPlanInjector(rng=rng, profile_name="saas")
+
+    # Call _build_plan with a spec that will trigger chunk selection.
+    spec = {"type": "accuracy", "label": __import__("confabra.schemas", fromlist=["AccuracyLabel"]).AccuracyLabel(status="supported", precision="exact")}
+    plan = injector._build_plan(
+        conv_event=event,
+        account_snap=None,
+        spec=spec,
+        kb_chunks=[webhook_chunk, general_chunk],
+    )
+
+    # Assertion 34: the webhook chunk must NOT have been selected — only the general chunk
+    # (or empty) is acceptable because the webhook chunk's intent_tag didn't match.
+    assert "kb_chunk_aa_webhook_narrow_v1" not in plan.kb_chunks_required, (
+        "Assertion 34 — webhook_configuration chunk must not appear in kb_chunks_required "
+        "for an event with intent=['api_usage_question'].  "
+        f"Got kb_chunks_required={plan.kb_chunks_required!r}"
+    )
+
+
+def test_satisfiability_fallback_drops_kb_required() -> None:
+    """
+    Assertion 35: when all chunks in the pick pool are tagged and none match the
+    event's intent, the injector must fall back to kb_required=[] (no crash, no
+    mismatched plan).
+
+    This validates the fallback policy: wrong-chunk plans are worse than no-chunk
+    plans from a training-signal perspective.
+    """
+    import random as _random
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from datetime import datetime, timezone as _tz
+
+    # All chunks are tagged — none will match "api_usage_question".
+    tagged_chunk_a = KBChunk(
+        chunk_id="kb_chunk_aa_webhook_only_a_v1",
+        document_id="doc_test_v1",
+        document_path="test/doc.md",
+        chunk_text="Webhook only content A.",
+        domains=["api_and_webhooks"],
+        intent_tags=["webhook_configuration"],
+    )
+    tagged_chunk_b = KBChunk(
+        chunk_id="kb_chunk_bb_webhook_only_b_v1",
+        document_id="doc_test_v1",
+        document_path="test/doc.md",
+        chunk_text="Webhook only content B.",
+        domains=["api_and_webhooks"],
+        intent_tags=["webhook_configuration"],
+    )
+    tagged_chunk_c = KBChunk(
+        chunk_id="kb_chunk_cc_webhook_only_c_v1",
+        document_id="doc_test_v1",
+        document_path="test/doc.md",
+        chunk_text="Webhook only content C.",
+        domains=["api_and_webhooks"],
+        intent_tags=["webhook_configuration"],
+    )
+
+    # Event with intent that matches none of the chunks.
+    event = SimEvent(
+        event_id="evt_rforge11_test_35",
+        event_type="conversation_started",
+        account_id="acct_test",
+        agent_id="agent_test",
+        timestamp=datetime(2026, 1, 1, 10, 0, tzinfo=_tz.utc),
+        day_index=0,
+        month_index=0,
+        payload={
+            "domain": "api_and_webhooks",
+            "intent": ["api_usage_question"],
+            "surface_channel": "intercom",
+            "customer_name": "Test Customer",
+            "agent_id": "agent_test",
+        },
+    )
+
+    rng = _random.Random(42)
+    injector = QualityPlanInjector(rng=rng, profile_name="saas")
+
+    _AccuracyLabel = __import__("confabra.schemas", fromlist=["AccuracyLabel"]).AccuracyLabel
+    spec = {"type": "accuracy", "label": _AccuracyLabel(status="supported", precision="exact")}
+
+    # Must not raise — fallback produces a valid plan with empty kb_chunks_required.
+    plan = injector._build_plan(
+        conv_event=event,
+        account_snap=None,
+        spec=spec,
+        kb_chunks=[tagged_chunk_a, tagged_chunk_b, tagged_chunk_c],
+    )
+
+    # Assertion 35a: plan must be produced without raising.
+    assert plan is not None, "Assertion 35a — _build_plan must return a plan, not raise"
+
+    # Assertion 35b: kb_chunks_required must be empty because all retries failed.
+    assert plan.kb_chunks_required == [], (
+        f"Assertion 35b — all retries failed (no intent match), "
+        f"expected kb_chunks_required=[] but got {plan.kb_chunks_required!r}"
+    )
+
+
+def test_conv_evt_00161_pattern_no_longer_mismatches() -> None:
+    """
+    Assertion 36: for an event with domain="api_and_webhooks" and
+    intent=["api_usage_question"], the injector must NOT select
+    kb_chunk_ti_webhook_error_allow_deny_v1 (which is tagged webhook_configuration).
+
+    This directly validates that the root cause of the conv_evt_00161 mismatch
+    — diagnosed in docs/resonantforge/plan-generator-chunk-mismatch-diagnosis.md —
+    is resolved.  The chunk's intent_tags=["webhook_configuration"] must prevent
+    selection for an api_usage_question event.
+    """
+    import random as _random
+    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from confabra.kb.saas_content import get_saas_kb_chunks
+    from datetime import datetime, timezone as _tz
+
+    # Reconstruct the event pattern that triggered the original mismatch.
+    event = SimEvent(
+        event_id="evt_00161_pattern",
+        event_type="conversation_started",
+        account_id="acct_004",
+        agent_id="agent_test",
+        timestamp=datetime(2026, 1, 1, 10, 0, tzinfo=_tz.utc),
+        day_index=0,
+        month_index=0,
+        payload={
+            "domain": "api_and_webhooks",
+            "intent": ["api_usage_question"],
+            "surface_channel": "intercom",
+            "customer_name": "Test Customer",
+            "agent_id": "agent_test",
+        },
+    )
+
+    kb_chunks = get_saas_kb_chunks()
+
+    # Run a large number of plans with different RNG seeds to exercise the full
+    # pick lottery — the webhook chunk must never appear as a selected chunk
+    # for an api_usage_question event.
+    _PROBE_SEEDS = list(range(50))
+    violations: list[str] = []
+
+    for seed in _PROBE_SEEDS:
+        rng = _random.Random(seed)
+        injector = QualityPlanInjector(rng=rng, profile_name="saas")
+        _AccuracyLabel = __import__("confabra.schemas", fromlist=["AccuracyLabel"]).AccuracyLabel
+        spec = {"type": "accuracy", "label": _AccuracyLabel(status="supported", precision="exact")}
+
+        plan = injector._build_plan(
+            conv_event=event,
+            account_snap=None,
+            spec=spec,
+            kb_chunks=kb_chunks,
+        )
+
+        if "kb_chunk_ti_webhook_error_allow_deny_v1" in plan.kb_chunks_required:
+            violations.append(f"seed={seed}: webhook chunk appeared in kb_chunks_required")
+
+    # Assertion 36: across 50 seeds, the webhook chunk must never be assigned to an
+    # api_usage_question event.
+    assert not violations, (
+        f"Assertion 36 — kb_chunk_ti_webhook_error_allow_deny_v1 was selected for "
+        f"an api_usage_question event in {len(violations)} of {len(_PROBE_SEEDS)} seed runs. "
+        f"First violation: {violations[0]}"
+    )
+
+
 def test_pipeline_aborts_on_hard_gate(tmp_path: Path) -> None:
     """
     Assertion 31: when prose_fact_rate exceeds the 2% gate, the pipeline raises
@@ -1496,6 +1800,56 @@ def test_engine_manifest_fields_populated(tmp_path: Path) -> None:
     assert isinstance(manifest.chunk_selection_frequency, dict), (
         "E8: manifest.chunk_selection_frequency is not a dict"
     )
+
+
+def test_accuracy_directive_contains_chunk_text() -> None:
+    """
+    E9 — For any accuracy plan with non-empty should_cite, the rendered
+    prose_generation_directives must contain the actual chunk_text of every
+    chunk in should_cite (substring match).
+
+    This regression test would have caught the original bug where only chunk IDs
+    were passed to the prose directive, leaving the LLM with no content to cite.
+    """
+    from confabra.schemas import AccuracyLabel
+    from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
+
+    chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
+
+    # Test all four accuracy label types across three domains.
+    labels = [
+        AccuracyLabel(status="supported", precision="exact"),
+        AccuracyLabel(status="supported", precision="overgeneralized"),
+        AccuracyLabel(status="supported", precision="conditional_applied"),
+        AccuracyLabel(status="contradicted", precision="exact"),
+    ]
+
+    for domain in ["billing", "api", "refunds"]:
+        for label in labels:
+            injector = _make_injector()
+            conv = _make_conv_event("evt_e9", domain)
+            snap = _make_snapshot()
+            spec = {"type": "accuracy", "label": label}
+
+            plan = injector._build_plan(conv, snap, spec, SYNTHETIC_KB_CHUNKS)
+
+            if not plan.knowledge_citations.should_cite:
+                continue  # no should_cite chunks — directive is vacuous, skip
+
+            directive = plan.prose_generation_directives
+            for cid in plan.knowledge_citations.should_cite:
+                if cid == "*":
+                    continue
+                chunk = chunk_by_id.get(cid)
+                assert chunk is not None, (
+                    f"E9: should_cite chunk_id={cid!r} not found in synthetic KB"
+                )
+                assert chunk.chunk_text in directive, (
+                    f"E9: domain={domain!r} label={label} — chunk_text of {cid!r} "
+                    f"not present in prose_generation_directives.\n"
+                    f"Directive:\n{directive}\n"
+                    f"Expected substring:\n{chunk.chunk_text}"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -1953,4 +2307,711 @@ def test_state_machine_domain_distribution_vs_profile_weights() -> None:
         f"SM3 — domain distribution outside ±{_TOLERANCE:.0%} tolerance "
         f"({n_total} total conversations):\n"
         + "\n".join(f"  {v}" for v in violations)
+    )
+
+
+def test_skipped_conversations_have_final_prose(tmp_path: Path) -> None:
+    """
+    Assertion 29: every skipped conversation record written after exhausting prose
+    retries must carry the full final prose in a ``final_prose`` field, and that
+    field must be consistent with the existing ``agent_prose_snippet`` (snippet is
+    the first 200 characters of the same prose string).
+
+    Uses the same mocked-validator approach as test_skipped_record_fields_complete
+    so no live API key is required.
+    """
+    from unittest.mock import patch
+
+    _FAKE_PROSE = (
+        "Customer: I need help with my account.\n"
+        "Agent: I'd be happy to help you today. What seems to be the issue?\n"
+        "Customer: I can't access the dashboard.\n"
+        "Agent: I understand. Let me look into that for you right away.\n"
+        "Customer: It's been broken since yesterday.\n"
+        "Agent: I can see the issue on our end and will escalate this immediately."
+    )
+
+    _fail_verdict = DimensionVerdict(
+        dimension="empathy",
+        verdict=ValidationVerdict.FAIL,
+        target="high",
+        signals_summary={"acknowledgment_present": False},
+    )
+
+    _skip_result = ValidationResult(
+        conversation_id="mocked",
+        overall_verdict=ValidationVerdict.SKIP,
+        dimension_verdicts=[_fail_verdict],
+        skip_reason="mocked SKIP for test_skipped_conversations_have_final_prose",
+        retry_count=2,
+    )
+
+    with (
+        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("confabra.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
+        patch(
+            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            return_value=_skip_result,
+        ),
+    ):
+        config = PipelineConfig(
+            profile_name="saas",
+            accounts=2,
+            months=1,
+            seed=42,
+            output_root=tmp_path,
+            anthropic_api_key="fake-key-for-final-prose-test",
+        )
+        with pytest.raises(RuntimeError, match="Quality gate"):
+            run_pipeline(config)
+
+    skipped_path = tmp_path / "saas" / "skipped_conversations.jsonl"
+    skipped = _read_jsonl(skipped_path)
+    assert len(skipped) > 0, (
+        "Assertion 29 — skipped_conversations.jsonl is empty, expected at least one "
+        "SKIPped record from the mocked validator"
+    )
+
+    violations: list[str] = []
+    for rec in skipped:
+        conv_id = rec.get("conversation_id", "?")
+
+        # final_prose must be present and non-empty
+        final_prose = rec.get("final_prose")
+        if not final_prose:
+            violations.append(f"conv_id={conv_id!r}: final_prose missing or empty (got {final_prose!r})")
+            continue
+
+        # snippet must be the first 200 chars of the same prose
+        snippet = rec.get("agent_prose_snippet") or ""
+        if not final_prose.startswith(snippet):
+            violations.append(
+                f"conv_id={conv_id!r}: agent_prose_snippet is not a prefix of final_prose "
+                f"(snippet={snippet[:40]!r}, prose_start={final_prose[:40]!r})"
+            )
+
+    assert not violations, (
+        f"Assertion 29 — {len(violations)} final_prose violation(s):\n"
+        + "\n".join(f"  {v}" for v in violations[:5])
+    )
+
+
+# ---------------------------------------------------------------------------
+# Accuracy extractor — fence stripping, parse logging, multi_chunk_required
+# ---------------------------------------------------------------------------
+
+
+def test_strip_markdown_fence_removes_json_wrapper() -> None:
+    """
+    _strip_markdown_fence must handle all fence variants and pass through clean JSON.
+
+    Assertion 30 — four cases:
+      a) Raw JSON (no fence) — unchanged.
+      b) ```json-wrapped — fence stripped, raw JSON returned.
+      c) Plain ```-wrapped — fence stripped, raw JSON returned.
+      d) Whitespace-padded raw JSON — leading/trailing whitespace removed.
+    """
+    from confabra.validators.extractors.accuracy import _strip_markdown_fence
+
+    raw = '[{"claim_text": "hello"}]'
+
+    # (a) raw JSON passthrough
+    assert _strip_markdown_fence(raw) == raw, "Assertion 30a — raw JSON should be unchanged"
+
+    # (b) ```json fence
+    fenced_json = f"```json\n{raw}\n```"
+    assert _strip_markdown_fence(fenced_json) == raw, (
+        "Assertion 30b — ```json fence should be stripped"
+    )
+
+    # (c) plain ``` fence
+    fenced_plain = f"```\n{raw}\n```"
+    assert _strip_markdown_fence(fenced_plain) == raw, (
+        "Assertion 30c — plain ``` fence should be stripped"
+    )
+
+    # (d) whitespace-padded raw JSON
+    padded = f"   {raw}   "
+    assert _strip_markdown_fence(padded) == raw, (
+        "Assertion 30d — surrounding whitespace should be stripped"
+    )
+
+
+def test_extract_claims_handles_fenced_response() -> None:
+    """
+    extract_claims_llm must return parsed claims when the model wraps output in a fence.
+
+    Assertion 31 — mock the Anthropic client to return a ```json-fenced response;
+    the extractor must return a non-empty claims list.
+    """
+    from unittest.mock import MagicMock
+    from confabra.validators.extractors.accuracy import extract_claims_llm
+
+    fenced_response = '```json\n[{"claim_text": "tokens do not expire", "claim_span": [0, 22], "claim_type": "factual", "subject": "tokens", "predicate": "expire", "object": "no"}]\n```'
+
+    mock_message = MagicMock()
+    mock_message.content = [MagicMock(text=fenced_response)]
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_message
+
+    claims = extract_claims_llm("tokens do not expire automatically", anthropic_client=mock_client)
+
+    assert len(claims) == 1, (
+        f"Assertion 31 — expected 1 claim from fenced response, got {len(claims)}"
+    )
+    assert claims[0].claim_text == "tokens do not expire", (
+        f"Assertion 31 — claim_text mismatch: {claims[0].claim_text!r}"
+    )
+
+
+def test_extract_claims_logs_on_parse_failure(caplog: pytest.LogCaptureFixture) -> None:
+    """
+    extract_claims_llm must return [] AND emit a WARNING log when the model returns
+    unparseable garbage (not a fence issue — just bad JSON).
+
+    Assertion 32 — use caplog to confirm the warning is emitted.
+    """
+    import logging
+    from unittest.mock import MagicMock
+    from confabra.validators.extractors.accuracy import extract_claims_llm
+
+    mock_message = MagicMock()
+    mock_message.content = [MagicMock(text="THIS IS NOT JSON AT ALL")]
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_message
+
+    with caplog.at_level(logging.WARNING, logger="confabra.validators.extractors.accuracy"):
+        claims = extract_claims_llm("some agent prose", anthropic_client=mock_client)
+
+    assert claims == [], (
+        f"Assertion 32 — expected [] on parse failure, got {claims}"
+    )
+    assert any("JSON parse failed" in record.message for record in caplog.records), (
+        "Assertion 32 — expected a 'JSON parse failed' warning to be logged"
+    )
+
+
+def test_multi_chunk_required_uses_length() -> None:
+    """
+    run_kb_alignment_pipeline's early-exit path must set multi_chunk_required=False
+    when kb_chunks_required has exactly one entry (single-chunk plan).
+
+    Assertion 33 — the early-exit path (no claims) previously used bool(kb_chunks_required),
+    which is True for any non-empty list. It must now use len > 1, matching the happy path.
+    """
+    from confabra.validators.extractors.accuracy import run_kb_alignment_pipeline
+    from confabra.schemas import KBChunk, ConstraintType
+
+    single_chunk_required = ["kb_chunk_api_authentication_v3"]
+    dummy_chunk = KBChunk(
+        chunk_id="kb_chunk_api_authentication_v3",
+        document_id="doc_1",
+        document_path="policies/api.md",
+        chunk_text="Tokens do not expire automatically.",
+        constraint_type=ConstraintType.INFORMATIONAL,
+    )
+
+    # No claims → early-exit path in run_kb_alignment_pipeline
+    signals = run_kb_alignment_pipeline(
+        claims=[],
+        kb_chunks=[dummy_chunk],
+        conversation_context="",
+        kb_chunks_required=single_chunk_required,
+        synonym_map={},
+    )
+
+    assert signals.multi_chunk_required is False, (
+        f"Assertion 33 — single-chunk plan should have multi_chunk_required=False, "
+        f"got {signals.multi_chunk_required}"
+    )
+
+
+def test_extract_claims_handles_null_fields() -> None:
+    """
+    extract_claims_llm must return gracefully when the model returns claims with
+    null values for subject, predicate, or object fields.
+
+    This reproduces the 'NoneType' object has no attribute 'lower' crash that occurred
+    on conv_evt_00165 (second retry): raw.get("subject", "") returns None when the JSON
+    key is present with a null value, bypassing the default — then _normalize_text(None)
+    called .lower() on None.
+
+    Assertions 34a–34c:
+      34a — null subject/predicate/object → non-empty claims list (graceful, not crash)
+      34b — null claim_type → falls back to "factual", claim is returned
+      34c — _normalize_text called with None directly → returns empty string (not crash)
+    """
+    from unittest.mock import MagicMock
+    from confabra.validators.extractors.accuracy import extract_claims_llm, _normalize_text
+
+    # 34c: direct guard on _normalize_text — must not raise
+    assert _normalize_text(None, {}) == "", (  # type: ignore[arg-type]
+        "Assertion 34c — _normalize_text(None) should return '' not crash"
+    )
+    assert _normalize_text(42, {}) == "", (  # type: ignore[arg-type]
+        "Assertion 34c — _normalize_text(non-str) should return '' not crash"
+    )
+
+    # 34a: null subject/predicate/object in LLM response
+    null_fields_response = (
+        '[{"claim_text": "tokens never expire", '
+        '"claim_span": [0, 19], '
+        '"claim_type": "factual", '
+        '"subject": null, '
+        '"predicate": null, '
+        '"object": null}]'
+    )
+    mock_msg_a = MagicMock()
+    mock_msg_a.content = [MagicMock(text=null_fields_response)]
+    mock_client_a = MagicMock()
+    mock_client_a.messages.create.return_value = mock_msg_a
+
+    claims_a = extract_claims_llm("tokens never expire", anthropic_client=mock_client_a)
+    assert len(claims_a) == 1, (
+        f"Assertion 34a — expected 1 claim despite null fields, got {len(claims_a)}"
+    )
+    assert claims_a[0].claim_text == "tokens never expire", (
+        f"Assertion 34a — claim_text wrong: {claims_a[0].claim_text!r}"
+    )
+    assert claims_a[0].normalized_subject == "", (
+        f"Assertion 34a — null subject should normalize to '', got {claims_a[0].normalized_subject!r}"
+    )
+
+    # 34b: null claim_type should default to "factual"
+    null_type_response = (
+        '[{"claim_text": "refunds take 5 days", '
+        '"claim_span": [0, 19], '
+        '"claim_type": null, '
+        '"subject": "refunds", '
+        '"predicate": "take", '
+        '"object": "5 days"}]'
+    )
+    mock_msg_b = MagicMock()
+    mock_msg_b.content = [MagicMock(text=null_type_response)]
+    mock_client_b = MagicMock()
+    mock_client_b.messages.create.return_value = mock_msg_b
+
+    claims_b = extract_claims_llm("refunds take 5 days", anthropic_client=mock_client_b)
+    assert len(claims_b) == 1, (
+        f"Assertion 34b — expected 1 claim with null claim_type fallback, got {len(claims_b)}"
+    )
+    assert claims_b[0].claim_type == "factual", (
+        f"Assertion 34b — null claim_type should default to 'factual', got {claims_b[0].claim_type!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Group 15 — Accuracy extractor candidate pool fixes (assertions 35a–35d)
+# ---------------------------------------------------------------------------
+
+
+def test_candidate_pool_is_required_chunks_only() -> None:
+    """
+    Assertion 35a: run_kb_alignment_pipeline must consider ONLY the chunks listed in
+    kb_chunks_required, never extra chunks that happen to be present in the full corpus.
+
+    A pool of 5 chunks is passed; only 2 are in kb_chunks_required. After the fix,
+    kb_chunks_used must be a subset of the required IDs — the unrequired chunks must
+    never surface in alignment output regardless of claim content.
+    """
+    from unittest.mock import MagicMock
+    from confabra.validators.extractors.accuracy import run_kb_alignment_pipeline
+    from confabra.schemas import Claim, KBChunk, ConstraintType
+
+    required_ids = {"kb_chunk_required_a", "kb_chunk_required_b"}
+    unrequired_ids = {"kb_chunk_unrequired_x", "kb_chunk_unrequired_y", "kb_chunk_unrequired_z"}
+
+    def _make_chunk(chunk_id: str, text: str) -> KBChunk:
+        return KBChunk(
+            chunk_id=chunk_id,
+            document_id="doc_test",
+            document_path="policies/test.md",
+            chunk_text=text,
+            constraint_type=ConstraintType.INFORMATIONAL,
+        )
+
+    # All chunks share the same keywords so relevance matching would hit all of them.
+    all_chunks = [
+        _make_chunk("kb_chunk_required_a", "refund policy allows returns within 30 days"),
+        _make_chunk("kb_chunk_required_b", "refund processing takes 5 business days"),
+        _make_chunk("kb_chunk_unrequired_x", "refund requests must be submitted online"),
+        _make_chunk("kb_chunk_unrequired_y", "refund eligibility requires original receipt"),
+        _make_chunk("kb_chunk_unrequired_z", "refund amounts are credited within 3 days"),
+    ]
+
+    # Claim is written to match all chunks by keyword overlap.
+    claim = Claim(
+        claim_text="We can process your refund within 30 days.",
+        claim_span=(0, 44),
+        claim_type="policy",
+        normalized_subject="refund",
+        normalized_predicate="process",
+        normalized_object="30 days",
+    )
+
+    signals = run_kb_alignment_pipeline(
+        claims=[claim],
+        kb_chunks=all_chunks,
+        conversation_context="",
+        kb_chunks_required=list(required_ids),
+        synonym_map={},
+    )
+
+    # Assertion 35a: no unrequired chunk may appear in kb_chunks_used.
+    used_set = set(signals.kb_chunks_used)
+    leaked = used_set & unrequired_ids
+    assert not leaked, (
+        f"Assertion 35a — unrequired chunks leaked into alignment: {leaked!r}. "
+        f"Candidate pool must be restricted to kb_chunks_required."
+    )
+
+
+def test_required_chunk_always_in_pool() -> None:
+    """
+    Assertion 35b: a required chunk at a high insertion index (>50) must reach
+    alignment scoring after the candidate pool fix.
+
+    Before the fix, top-K truncation would silently exclude insertion-order index 55.
+    After the fix, the required chunk is the *only* candidate regardless of position.
+    """
+    from confabra.validators.extractors.accuracy import run_kb_alignment_pipeline
+    from confabra.schemas import Claim, KBChunk, ConstraintType
+
+    target_id = "kb_chunk_target_at_index_55"
+
+    # Build 60 filler chunks that do not share keywords with the claim.
+    filler_chunks = [
+        KBChunk(
+            chunk_id=f"kb_chunk_filler_{i:03d}",
+            document_id="doc_filler",
+            document_path="policies/filler.md",
+            chunk_text=f"unrelated policy clause number {i} about escalation procedures",
+            constraint_type=ConstraintType.INFORMATIONAL,
+        )
+        for i in range(60)
+    ]
+
+    # Target chunk is at position 55 in the list (high insertion index).
+    target_chunk = KBChunk(
+        chunk_id=target_id,
+        document_id="doc_target",
+        document_path="policies/webhook.md",
+        chunk_text="webhook tokens do not expire unless explicitly revoked",
+        constraint_type=ConstraintType.INFORMATIONAL,
+    )
+    all_chunks = filler_chunks[:55] + [target_chunk] + filler_chunks[55:]
+
+    # Claim that shares keywords with the target chunk only.
+    claim = Claim(
+        claim_text="Tokens do not expire automatically.",
+        claim_span=(0, 35),
+        claim_type="policy",
+        normalized_subject="tokens",
+        normalized_predicate="expire",
+        normalized_object="",
+    )
+
+    signals = run_kb_alignment_pipeline(
+        claims=[claim],
+        kb_chunks=all_chunks,
+        conversation_context="",
+        kb_chunks_required=[target_id],
+        synonym_map={},
+    )
+
+    # Assertion 35b: target chunk must appear in kb_chunks_used (it reached alignment scoring).
+    assert target_id in signals.kb_chunks_used, (
+        f"Assertion 35b — required chunk at insertion index 55 was not reached. "
+        f"kb_chunks_used={signals.kb_chunks_used!r}. "
+        f"Top-K insertion-order truncation may still be active."
+    )
+
+
+def test_word_boundary_trigger_matching() -> None:
+    """
+    Assertion 35c: _check_constraint_type_applies must use word-boundary matching
+    for trigger phrases, not substring matching.
+
+    'supermore than 5' must NOT match the trigger 'more than'.
+    'more than 5 units' MUST match 'more than'.
+    'used up all quota' MUST match 'used'.
+    'unused credits' must NOT match 'used' (substring inside 'unused').
+    """
+    from confabra.validators.extractors.accuracy import _check_constraint_type_applies
+    from confabra.schemas import KBChunk, ConstraintType
+
+    deny_chunk = KBChunk(
+        chunk_id="kb_chunk_deny_usage",
+        document_id="doc_deny",
+        document_path="policies/usage.md",
+        chunk_text="Refunds are not available when usage exceeds more than 500 units.",
+        constraint_type=ConstraintType.DENY_CONDITION,
+    )
+
+    # Should NOT fire: 'supermore than' contains 'more than' as substring but not at a word boundary.
+    assert _check_constraint_type_applies(deny_chunk, "I have supermore than 5 tasks here") is False, (
+        "Assertion 35c — 'supermore than' matched trigger 'more than' via substring; "
+        "word-boundary matching must prevent this."
+    )
+
+    # Should NOT fire: 'unused' contains 'used' as substring but not at a word boundary.
+    assert _check_constraint_type_applies(deny_chunk, "I have unused credits on my account") is False, (
+        "Assertion 35c — 'unused' matched trigger 'used' via substring; "
+        "word-boundary matching must prevent this."
+    )
+
+    # SHOULD fire: 'more than' appears as a complete word phrase.
+    assert _check_constraint_type_applies(deny_chunk, "I have used more than 600 units this month") is True, (
+        "Assertion 35c — 'more than' at word boundary should trigger the deny condition."
+    )
+
+    # SHOULD fire: 'used' appears as a standalone word.
+    assert _check_constraint_type_applies(deny_chunk, "I used all of my quota already") is True, (
+        "Assertion 35c — standalone 'used' should trigger the deny condition."
+    )
+
+
+def test_organic_conversation_handles_empty_required() -> None:
+    """
+    Assertion 35d: run_kb_alignment_pipeline with an empty kb_chunks_required list
+    must return an early-exit AccuracySignals without crashing.
+
+    Organic conversations (no QualityPlan planted) produce empty kb_chunks_required.
+    The pipeline must not attempt KB alignment and must return alignment='not_found'
+    with all constraint flags False.
+    """
+    from confabra.validators.extractors.accuracy import run_kb_alignment_pipeline
+    from confabra.schemas import Claim, KBChunk, ConstraintType
+
+    chunk = KBChunk(
+        chunk_id="kb_chunk_some_policy",
+        document_id="doc_1",
+        document_path="policies/billing.md",
+        chunk_text="Billing cycles reset on the first of each month.",
+        constraint_type=ConstraintType.INFORMATIONAL,
+    )
+    claim = Claim(
+        claim_text="Billing resets monthly.",
+        claim_span=(0, 22),
+        claim_type="policy",
+        normalized_subject="billing",
+        normalized_predicate="resets",
+        normalized_object="monthly",
+    )
+
+    signals = run_kb_alignment_pipeline(
+        claims=[claim],
+        kb_chunks=[chunk],
+        conversation_context="",
+        kb_chunks_required=[],  # organic — no planted ground truth
+        synonym_map={},
+    )
+
+    # Assertion 35d: early return with not_found alignment; no constraint flags set.
+    assert signals.alignment == "not_found", (
+        f"Assertion 35d — organic conversation (empty required) should yield "
+        f"alignment='not_found', got {signals.alignment!r}"
+    )
+    assert signals.blocking_constraint_violated is False, (
+        "Assertion 35d — blocking_constraint_violated must be False for organic conversation"
+    )
+    assert signals.overgeneralization_flag is False, (
+        "Assertion 35d — overgeneralization_flag must be False for organic conversation"
+    )
+    assert signals.kb_chunks_used == [], (
+        f"Assertion 35d — kb_chunks_used must be empty for organic conversation, "
+        f"got {signals.kb_chunks_used!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 1A — Empathy / resolution lexicon expansion + apology bridge
+# ---------------------------------------------------------------------------
+
+
+def test_empathy_recognizes_sorry_youre_hitting() -> None:
+    """
+    Assertion 36a — "sorry you're hitting" must produce acknowledgment_present: True.
+
+    "sorry you're experiencing" was the only "sorry you're <verb>" entry before
+    Phase 1A. Agents routinely use "hitting", "running into", and "seeing" for
+    the same sentiment.
+    """
+    from confabra.validators.extractors.empathy import extract_empathy_signals
+    from confabra.profiles.lexicons.saas import (
+        ACKNOWLEDGMENT_PHRASES, EMOTION_LEXICON, APOLOGY_LEXICON, ACTION_VERB_LEXICON,
+    )
+
+    prose = "I'm sorry you're hitting that error—let me look into it right now."
+    signals = extract_empathy_signals(
+        agent_prose=prose,
+        acknowledgment_phrases=ACKNOWLEDGMENT_PHRASES,
+        emotion_lexicon=EMOTION_LEXICON,
+        apology_lexicon=APOLOGY_LEXICON,
+        action_verb_lexicon=ACTION_VERB_LEXICON,
+    )
+    assert signals.acknowledgment_present is True, (
+        "Assertion 36a — 'sorry you're hitting' should produce acknowledgment_present=True; "
+        f"got acknowledgment_present={signals.acknowledgment_present}, "
+        f"ack_phrases={signals.acknowledgment_phrases}"
+    )
+
+
+def test_empathy_recognizes_positive_warmth_terms() -> None:
+    """
+    Assertion 36b — positive warmth terms ("glad") must produce emotional_language_present: True.
+
+    EMOTION_LEXICON previously covered only negative-affect vocabulary. Agents
+    expressing positive warmth ("I'm glad we got this sorted") scored zero on
+    emotional_language_present despite clear empathetic signal.
+    """
+    from confabra.validators.extractors.empathy import extract_empathy_signals
+    from confabra.profiles.lexicons.saas import (
+        ACKNOWLEDGMENT_PHRASES, EMOTION_LEXICON, APOLOGY_LEXICON, ACTION_VERB_LEXICON,
+    )
+
+    prose = "I'm glad we could get this sorted for you today."
+    signals = extract_empathy_signals(
+        agent_prose=prose,
+        acknowledgment_phrases=ACKNOWLEDGMENT_PHRASES,
+        emotion_lexicon=EMOTION_LEXICON,
+        apology_lexicon=APOLOGY_LEXICON,
+        action_verb_lexicon=ACTION_VERB_LEXICON,
+    )
+    assert signals.emotional_language_present is True, (
+        "Assertion 36b — 'glad' should produce emotional_language_present=True; "
+        f"got emotional_language_present={signals.emotional_language_present}, "
+        f"emotional_terms={signals.emotional_terms}"
+    )
+
+
+def test_empathy_walk_through_triggers_follow_through() -> None:
+    """
+    Assertion 36c — "let me walk you through this" after an acknowledgment phrase
+    must produce follow_through_present: True.
+
+    "walk" was absent from ACTION_VERB_LEXICON. "let me walk you through this" is
+    a canonical follow-through phrase in conversational support.
+    """
+    from confabra.validators.extractors.empathy import extract_empathy_signals
+    from confabra.profiles.lexicons.saas import (
+        ACKNOWLEDGMENT_PHRASES, EMOTION_LEXICON, APOLOGY_LEXICON, ACTION_VERB_LEXICON,
+    )
+
+    prose = "I can see the issue. Let me walk you through the fix step by step."
+    signals = extract_empathy_signals(
+        agent_prose=prose,
+        acknowledgment_phrases=ACKNOWLEDGMENT_PHRASES,
+        emotion_lexicon=EMOTION_LEXICON,
+        apology_lexicon=APOLOGY_LEXICON,
+        action_verb_lexicon=ACTION_VERB_LEXICON,
+    )
+    assert signals.follow_through_present is True, (
+        "Assertion 36c — 'let me walk you through' after ack phrase should produce "
+        f"follow_through_present=True; got follow_through_present={signals.follow_through_present}"
+    )
+
+
+def test_empathy_apology_bridges_to_acknowledgment() -> None:
+    """
+    Assertion 36d — an apology alone (no ACKNOWLEDGMENT_PHRASES match) must produce
+    acknowledgment_present: True via the apology bridge.
+
+    Before the bridge fix, an agent who opened with "I'm sorry" (APOLOGY_LEXICON
+    match) but hit no ACKNOWLEDGMENT_PHRASES entry would always fail the empathy
+    high gate. Apologies are a superset of acknowledgments from a human empathy
+    standpoint.
+    """
+    from confabra.validators.extractors.empathy import extract_empathy_signals
+    from confabra.profiles.lexicons.saas import (
+        EMOTION_LEXICON, APOLOGY_LEXICON, ACTION_VERB_LEXICON,
+    )
+
+    # Use a minimal ACKNOWLEDGMENT_PHRASES list that will NOT match this prose,
+    # so the only empathy signal is the apology.
+    minimal_ack_phrases: list[str] = []
+    prose = "I'm sorry for the trouble. Let me resolve this for you right now."
+    signals = extract_empathy_signals(
+        agent_prose=prose,
+        acknowledgment_phrases=minimal_ack_phrases,
+        emotion_lexicon=EMOTION_LEXICON,
+        apology_lexicon=APOLOGY_LEXICON,
+        action_verb_lexicon=ACTION_VERB_LEXICON,
+    )
+    assert signals.acknowledgment_present is True, (
+        "Assertion 36d — apology alone should bridge to acknowledgment_present=True; "
+        f"got acknowledgment_present={signals.acknowledgment_present}, "
+        f"apology_terms={signals.apology_terms}"
+    )
+
+
+def test_resolution_recognizes_imperative_instructions() -> None:
+    """
+    Assertion 36e — "you'll want to go to Settings" must produce solution_provided: True.
+
+    RESOLUTION_PATTERNS was biased toward outcome-summary language and had no
+    coverage of imperative instruction patterns (the dominant pattern in step-by-step
+    LLM-generated support responses).
+    """
+    from confabra.validators.extractors.resolution import extract_resolution_signals
+    from confabra.profiles.lexicons.saas import (
+        RESOLUTION_PATTERNS, DEFLECTION_PATTERNS, NEXT_STEPS_PATTERNS,
+        TEMPORAL_ANCHOR_PATTERNS, SPECIFIC_ACTOR_PATTERNS, OWNERSHIP_PATTERNS,
+        ISSUE_KEYWORDS,
+    )
+
+    prose = "You'll want to go to Settings and update your configuration there."
+    signals = extract_resolution_signals(
+        agent_prose=prose,
+        customer_prose="",
+        resolution_patterns=RESOLUTION_PATTERNS,
+        deflection_patterns=DEFLECTION_PATTERNS,
+        next_steps_patterns=NEXT_STEPS_PATTERNS,
+        temporal_anchor_patterns=TEMPORAL_ANCHOR_PATTERNS,
+        specific_actor_patterns=SPECIFIC_ACTOR_PATTERNS,
+        ownership_patterns=OWNERSHIP_PATTERNS,
+        issue_keywords=ISSUE_KEYWORDS,
+    )
+    assert signals.solution_provided is True, (
+        "Assertion 36e — \"you'll want to go to\" should produce solution_provided=True; "
+        f"got solution_provided={signals.solution_provided}"
+    )
+
+
+def test_resolution_recognizes_hyphenated_temporal_range() -> None:
+    """
+    Assertion 36f — "within 10-15 minutes" must produce next_steps_actionable: True.
+
+    The pattern r"\\bwithin \\d+ (?:hour|minute|day|business day)\\b" did not match
+    hyphenated ranges ("10-15") because \\d+ matches only a single integer. The unit
+    word "minutes" was then not adjacent to the matched digit group, causing
+    next_steps_actionable=False for well-written time-estimate responses.
+    """
+    from confabra.validators.extractors.resolution import extract_resolution_signals
+    from confabra.profiles.lexicons.saas import (
+        RESOLUTION_PATTERNS, DEFLECTION_PATTERNS, NEXT_STEPS_PATTERNS,
+        TEMPORAL_ANCHOR_PATTERNS, SPECIFIC_ACTOR_PATTERNS, OWNERSHIP_PATTERNS,
+        ISSUE_KEYWORDS,
+    )
+
+    # next_steps_present requires a NEXT_STEPS_PATTERNS match; "within \d+" already
+    # matches. The temporal anchor "within 10-15 minutes" is the new addition.
+    prose = "DNS propagation usually completes within 10-15 minutes in most cases."
+    signals = extract_resolution_signals(
+        agent_prose=prose,
+        customer_prose="",
+        resolution_patterns=RESOLUTION_PATTERNS,
+        deflection_patterns=DEFLECTION_PATTERNS,
+        next_steps_patterns=NEXT_STEPS_PATTERNS,
+        temporal_anchor_patterns=TEMPORAL_ANCHOR_PATTERNS,
+        specific_actor_patterns=SPECIFIC_ACTOR_PATTERNS,
+        ownership_patterns=OWNERSHIP_PATTERNS,
+        issue_keywords=ISSUE_KEYWORDS,
+    )
+    assert signals.next_steps_actionable is True, (
+        "Assertion 36f — 'within 10-15 minutes' should produce next_steps_actionable=True; "
+        f"got next_steps_actionable={signals.next_steps_actionable}, "
+        f"next_steps_present={signals.next_steps_present}"
     )

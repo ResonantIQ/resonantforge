@@ -258,6 +258,12 @@ class KBChunk(BaseModel):
     cat11_gate: Optional[str] = None  # which gate this chunk supports
     tone_variant: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
     domains: list[str] = Field(default_factory=list)  # topic domains this chunk covers
+    # intent_tags narrow chunk eligibility to events whose intent list intersects this set.
+    # Used by the plan injector's satisfiability pre-check: a chunk with
+    # intent_tags=["webhook_configuration"] will only be selected for events that carry
+    # "webhook_configuration" in their intent field.  Empty list means "match any intent
+    # within domain" — backward compatible with all pre-RFORGE-11 chunks.
+    intent_tags: list[str] = Field(default_factory=list)
     adversarial: bool = False  # opt-in required to include in should_cite
     sanity_probe: bool = False  # rotational probe per separability hypothesis schedule (PR4+)
     claims: dict[str, Any] = Field(default_factory=dict)
@@ -472,6 +478,7 @@ class SkippedConversationRecord(BaseModel):
     final_retry_count: int
     final_verdicts: list[dict[str, Any]]
     agent_prose_snippet: Optional[str]
+    final_prose: Optional[str] = None
     kb_chunks_required: Optional[list[str]]
     timestamp: str
 

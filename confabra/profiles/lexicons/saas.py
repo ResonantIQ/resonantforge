@@ -15,6 +15,9 @@ ACKNOWLEDGMENT_PHRASES = [
     "thank you for letting us know",
     "thank you for reaching out",
     "sorry you're experiencing",
+    "sorry you're hitting",
+    "sorry you're running into",
+    "sorry you're seeing",
     "sorry to hear",
     "i'm sorry that",
     "i know this is",
@@ -26,6 +29,14 @@ ACKNOWLEDGMENT_PHRASES = [
     "i see what you mean",
     "i get that",
     "i know how",
+    "i'd be happy",
+    "happy to help",
+    "no problem",
+    "got it",
+    "good question",
+    "of course",
+    "absolutely",
+    "sure thing",
 ]
 
 # Terms indicating emotional awareness
@@ -51,6 +62,13 @@ EMOTION_LEXICON = [
     "trouble",
     "struggle",
     "struggling",
+    "glad",
+    "happy",
+    "pleased",
+    "delighted",
+    "wonderful",
+    "great to hear",
+    "good luck",
 ]
 
 # Apology terms
@@ -97,6 +115,14 @@ ACTION_VERB_LEXICON = [
     "reach out",
     "get back",
     "reach back",
+    "walk",
+    "guide",
+    "show",
+    "help",
+    "assist",
+    "explain",
+    "clarify",
+    "take you through",
 ]
 
 # ============================================================
@@ -121,6 +147,15 @@ RESOLUTION_PATTERNS = [
     r"\byou should be able\b",
     r"\bthat should\b",
     r"\bthis should\b",
+    r"\byou'?ll want to\b",
+    r"\byou'?d need to\b",
+    r"\byou need to\b",
+    r"\byou should\b",
+    r"\bgo to\b",
+    r"\bclick (?:on |the )\b",
+    r"\bcopy (?:the |that )\b",
+    r"\bpaste (?:it|that|the)\b",
+    r"\bwhat you need to do\b",
 ]
 
 # Patterns indicating deflection without help
@@ -154,11 +189,13 @@ NEXT_STEPS_PATTERNS = [
 # Temporal anchors (subset of next_steps)
 TEMPORAL_ANCHOR_PATTERNS = [
     r"\bby [a-z]+ (?:morning|afternoon|evening|day|week|friday|monday)\b",
-    r"\bwithin \d+ (?:hour|minute|day|business day)\b",
+    r"\bwithin \d+[-–]\d+ (?:hours?|minutes?|days?|business days?)\b",
+    r"\bwithin \d+ (?:hours?|minutes?|days?|business days?)\b",
     r"\bby end of (?:day|week|business day)\b",
     r"\bby tomorrow\b",
     r"\bby today\b",
-    r"\bin \d+ (?:hour|minute|day)\b",
+    r"\bin \d+ (?:hours?|minutes?|days?)\b",
+    r"\btoday\b",
 ]
 
 # Specific actor patterns (make next_steps actionable)

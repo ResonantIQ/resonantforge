@@ -507,3 +507,84 @@ def check_invariants_cmd(profile: str) -> None:
         raise SystemExit(1)
 
     console.print(f"[green]Invariant check PASSED — 0 errors, {len(report.warnings)} warning(s).[/green]")
+
+
+# ---------------------------------------------------------------------------
+# inspect-skip
+# ---------------------------------------------------------------------------
+
+
+@cli.command("inspect-skip")
+@click.argument("conversation_id")
+@click.option("--corpus", "corpus_dir", required=True, type=click.Path(exists=True, file_okay=False, path_type=Path), help="Corpus directory (the profile subdirectory, e.g. corpus/saas)")
+def inspect_skip(conversation_id: str, corpus_dir: Path) -> None:
+    """Print full debug context for a skipped conversation."""
+    skip_path = corpus_dir / "skipped_conversations.jsonl"
+    if not skip_path.exists():
+        console.print(f"[red]Error:[/red] {skip_path} not found")
+        raise SystemExit(1)
+
+    record: Optional[dict] = None
+    for line in skip_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        if rec.get("conversation_id") == conversation_id:
+            record = rec
+            break
+
+    if record is None:
+        console.print(f"[red]No skip record found for conversation_id={conversation_id!r}[/red]")
+        raise SystemExit(1)
+
+    # Load KB chunks for lookup.
+    chunks_path = corpus_dir / "knowledge_base" / "chunks.jsonl"
+    chunk_map: dict[str, str] = {}
+    if chunks_path.exists():
+        for line in chunks_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            chunk = json.loads(line)
+            chunk_map[chunk["chunk_id"]] = chunk.get("chunk_text", "")
+
+    console.rule("[bold]Conversation Identity[/bold]")
+    console.print(f"conversation_id : {record.get('conversation_id')}")
+    console.print(f"account_id      : {record.get('account_id')}")
+    console.print(f"event_id        : {record.get('event_id')}")
+    console.print(f"final_retry_count: {record.get('final_retry_count')}")
+    console.print(f"timestamp       : {record.get('timestamp')}")
+
+    console.rule("[bold]Quality Plan Summary[/bold]")
+    qps = record.get("quality_plan_summary") or {}
+    if qps:
+        for k, v in qps.items():
+            console.print(f"  {k}: {v}")
+    else:
+        console.print("  [dim](no quality plan — organic conversation)[/dim]")
+
+    console.rule("[bold]Verdicts That Caused the Skip[/bold]")
+    for v in record.get("final_verdicts") or []:
+        console.print(
+            f"  [{('red' if v.get('verdict') == 'fail' else 'yellow')}]{v.get('dimension')}[/] "
+            f"→ {v.get('verdict')}  target={v.get('target')}"
+        )
+        signals = v.get("signals_summary") or {}
+        for sk, sv in signals.items():
+            console.print(f"      {sk}: {sv}")
+
+    console.rule("[bold]Required KB Chunks[/bold]")
+    required_ids: list[str] = record.get("kb_chunks_required") or []
+    if required_ids:
+        for cid in required_ids:
+            text = chunk_map.get(cid, "[chunk not found in chunks.jsonl]")
+            console.print(f"\n  [bold cyan]{cid}[/bold cyan]")
+            console.print(f"  {text}")
+    else:
+        console.print("  [dim](none)[/dim]")
+
+    console.rule("[bold]Final Prose[/bold]")
+    final_prose = record.get("final_prose") or record.get("agent_prose_snippet") or ""
+    if not final_prose:
+        console.print("  [dim](no prose captured — pre-prompt or API-error skip)[/dim]")
+    else:
+        console.print(final_prose)

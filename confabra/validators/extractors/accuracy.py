@@ -5,9 +5,14 @@ Implements the 8-step claim extraction + KB alignment pipeline (Section 5.1.1).
 from __future__ import annotations
 import re
 import json
+import logging
 from typing import Any
+import anthropic
 from anthropic import Anthropic
+from pydantic import ValidationError
 from confabra.schemas import Claim, AccuracySignals, KBChunk, ConstraintType
+
+logger = logging.getLogger(__name__)
 
 # Locked-down claim extraction prompt (temperature=0, structured JSON only)
 CLAIM_EXTRACTION_PROMPT = """Extract explicit claims made by the agent.
@@ -30,7 +35,24 @@ Rules:
 - Keep claims atomic
 - Preserve verbatim text for claim_text
 - Return [] if no claims found
-- Return only valid JSON, no commentary"""
+- Respond with raw JSON only. Do not wrap in markdown code fences."""
+
+
+def _strip_markdown_fence(content: str) -> str:
+    """
+    Strip ```json ... ``` or ``` ... ``` fences from LLM response if present.
+
+    Defense-in-depth: the prompt explicitly forbids fences, but some models add them
+    anyway. Strip before json.loads so a fenced response isn't silently discarded.
+    """
+    content = content.strip()
+    if content.startswith("```"):
+        first_newline = content.find("\n")
+        if first_newline != -1:
+            content = content[first_newline + 1:]
+        if content.endswith("```"):
+            content = content[:-3].strip()
+    return content
 
 
 def extract_claims_llm(agent_prose: str, anthropic_client: Anthropic | None = None) -> list[Claim]:
@@ -68,30 +90,64 @@ def extract_claims_llm(agent_prose: str, anthropic_client: Anthropic | None = No
         )
 
         content = response.content[0].text.strip()
+        content = _strip_markdown_fence(content)
 
-        # Parse JSON output — LLM is instructed to return only valid JSON.
+        # Parse JSON output — LLM is instructed to return raw JSON only.
         raw_claims = json.loads(content)
 
         claims = []
         for raw in raw_claims:
+            # Use `or default` (not `get(key, default)`) so that JSON null values
+            # — which dict.get returns as None even when a default is provided —
+            # are replaced with the intended fallback string.
+            claim_text = raw.get("claim_text") or ""
+            claim_type = raw.get("claim_type") or "factual"
+            subject = raw.get("subject") or ""
+            predicate = raw.get("predicate") or ""
+            obj = raw.get("object") or ""
+
             # Validate claim_span is a two-element list/tuple.
-            span = raw.get("claim_span", [0, len(raw.get("claim_text", ""))])
+            span = raw.get("claim_span") or [0, len(claim_text)]
             if len(span) != 2:
-                span = [0, len(raw.get("claim_text", ""))]
+                span = [0, len(claim_text)]
 
             claims.append(Claim(
-                claim_text=raw.get("claim_text", ""),
+                claim_text=claim_text,
                 claim_span=(span[0], span[1]),
-                claim_type=raw.get("claim_type", "factual"),
-                normalized_subject=_normalize_text(raw.get("subject", ""), {}),
-                normalized_predicate=_normalize_text(raw.get("predicate", ""), {}),
-                normalized_object=_normalize_text(raw.get("object", ""), {}),
+                claim_type=claim_type,
+                normalized_subject=_normalize_text(subject, {}),
+                normalized_predicate=_normalize_text(predicate, {}),
+                normalized_object=_normalize_text(obj, {}),
             ))
 
         return claims
 
-    except (json.JSONDecodeError, KeyError, IndexError, Exception):
-        # On any LLM failure, return empty claims — never gate the pipeline on LLM errors.
+    except json.JSONDecodeError as e:
+        # content is always bound before json.loads() so the reference is safe here.
+        logger.warning(
+            "extract_claims_llm: JSON parse failed — returning empty claims",
+            extra={"error": str(e), "raw_response_preview": content[:300]},
+        )
+        return []
+    except (KeyError, IndexError) as e:
+        logger.warning(
+            "extract_claims_llm: schema mismatch in model response — returning empty claims",
+            extra={"error": str(e)},
+        )
+        return []
+    except ValidationError as e:
+        # Pydantic rejected a field value the model returned (e.g. unknown claim_type literal).
+        logger.warning(
+            "extract_claims_llm: Claim schema validation failed — returning empty claims",
+            extra={"error": str(e)},
+        )
+        return []
+    except anthropic.APIError as e:
+        # Network failures, auth errors, rate limits — never gate the pipeline on these.
+        logger.warning(
+            "extract_claims_llm: Anthropic API error — returning empty claims",
+            extra={"error": str(e)},
+        )
         return []
 
 
@@ -112,6 +168,8 @@ def _normalize_text(text: str, synonym_map: dict[str, str]) -> str:
     Returns:
         Normalized string suitable for term-overlap matching.
     """
+    if not isinstance(text, str):
+        return ""
     normalized = text.lower()
     normalized = re.sub(r'[^\w\s]', ' ', normalized)
     normalized = re.sub(r'\s+', ' ', normalized).strip()
@@ -153,6 +211,8 @@ def _extract_constraints_from_text(text: str) -> list[str]:
         r'\bgreater than\b',
     ]
 
+    if not text:
+        return []
     found = []
     text_lower = text.lower()
     for pattern in constraint_patterns:
@@ -181,7 +241,7 @@ def _check_constraint_type_applies(chunk: KBChunk, conversation_context: str) ->
         return False
 
     chunk_lower = chunk.chunk_text.lower()
-    context_lower = conversation_context.lower()
+    context_lower = (conversation_context or "").lower()
 
     # Extract numeric thresholds stated in the deny chunk.
     numbers_in_chunk = re.findall(r'\b\d+\b', chunk_lower)
@@ -191,8 +251,12 @@ def _check_constraint_type_applies(chunk: KBChunk, conversation_context: str) ->
         "over", "above", "beyond", "quota", "limit"
     ]
 
-    chunk_has_triggers = any(phrase in chunk_lower for phrase in trigger_phrases)
-    context_has_triggers = any(phrase in context_lower for phrase in trigger_phrases)
+    chunk_has_triggers = any(
+        re.search(r'\b' + re.escape(phrase) + r'\b', chunk_lower) for phrase in trigger_phrases
+    )
+    context_has_triggers = any(
+        re.search(r'\b' + re.escape(phrase) + r'\b', context_lower) for phrase in trigger_phrases
+    )
 
     if chunk_has_triggers and context_has_triggers:
         # Both the deny chunk and the customer context reference usage/limit concepts —
@@ -335,7 +399,8 @@ def run_kb_alignment_pipeline(
     candidates directly).  All logic from Step 3 onward is pure Python — no LLM.
 
     Pipeline summary:
-      Step 2  — cap candidates to top_k chunks.
+      Step 2  — candidate pool = required chunks only (kb_chunks_required); organic
+                conversations with an empty required list return early as not_found.
       Step 3  — per-claim relevance check and alignment classification.
       Step 4  — aggregate alignment across all claims (worst-case wins).
       Step 5  — overgeneralization flag (constraint in chunk, absent from claim).
@@ -345,11 +410,11 @@ def run_kb_alignment_pipeline(
 
     Args:
         claims: extracted claims from Step 1 (may be empty).
-        kb_chunks: pre-retrieved KB chunks (top-K from match_knowledge_chunks).
+        kb_chunks: full KB chunk list; only chunks in kb_chunks_required are used.
         conversation_context: customer turns only (used for Step 6 deny-condition check).
-        kb_chunks_required: planted ground-truth chunk IDs for multi-chunk validation.
+        kb_chunks_required: planted ground-truth chunk IDs; defines the candidate pool.
         synonym_map: per-profile synonym mapping for text normalization.
-        top_k: maximum number of KB chunks to consider per claim.
+        top_k: unused (retained for backward-compatible call sites).
 
     Returns:
         AccuracySignals capturing the full pipeline verdict.
@@ -364,12 +429,26 @@ def run_kb_alignment_pipeline(
             constraint_preserved=True,
             overgeneralization_flag=False,
             blocking_constraint_violated=False,
-            multi_chunk_required=bool(kb_chunks_required),
+            multi_chunk_required=len(kb_chunks_required) > 1,
             multi_chunk_satisfied=False,
         )
 
-    # Step 2: Cap candidate pool to top_k.
-    candidate_chunks = kb_chunks[:top_k] if len(kb_chunks) > top_k else kb_chunks
+    # Step 2: Candidate pool = required chunks only (never insertion-order truncation).
+    # Organic conversations (empty kb_chunks_required) skip KB alignment entirely.
+    required_set = set(kb_chunks_required)
+    if not required_set:
+        return AccuracySignals(
+            claims=claims,
+            kb_chunks_used=[],
+            kb_chunks_required=kb_chunks_required,
+            alignment="not_found",
+            constraint_preserved=True,
+            overgeneralization_flag=False,
+            blocking_constraint_violated=False,
+            multi_chunk_required=False,
+            multi_chunk_satisfied=False,
+        )
+    candidate_chunks = [c for c in kb_chunks if c.chunk_id in required_set]
 
     per_claim_results: list[str] = []
     kb_chunks_used: list[str] = []

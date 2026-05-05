@@ -6,6 +6,32 @@ Covers 8 policy/product documents and 62 domain-tagged chunks (46 original + 16 
 - All 9 Cat 11 honesty gates (gate_1 through gate_9)
 - 1 rotational sanity probe (gate_4 / technical_issue / dependency-impact topology)
 
+intent_tags convention (RFORGE-11)
+-----------------------------------
+``intent_tags`` on a chunk narrows eligibility to events whose ``intent`` field intersects
+the tag set.  The plan injector's satisfiability pre-check uses this to prevent assigning a
+topically specific chunk to a conversation whose prose will be generated around a different
+intent — the root cause of the conv_evt_00161 and conv_evt_00237 mismatches.
+
+Rule for when to tag vs. leave empty:
+
+  TAG (non-empty intent_tags) — use when the chunk is about one narrow sub-topic within its
+  domain that only makes sense in conversations of that specific type.  Examples:
+    - Webhook Dead Letter log replay authorisation (meaningful only in webhook_configuration)
+    - SAML SSO setup steps (meaningful only in account_access_issue)
+    - API Bearer token authentication (meaningful only in api_usage_question)
+
+  LEAVE EMPTY (intent_tags=[]) — use when the chunk provides general domain grounding that
+  could reasonably appear in any conversation within its domain.  Examples:
+    - General refund policy overview
+    - Technical issue severity taxonomy
+    - SLA uptime definition
+
+  Tag values must come from the domain_intents() vocabulary declared in saas.py, PLUS any
+  intent strings that a future vocabulary expansion may add.  Using a tag that no event will
+  ever carry is safe — the chunk simply falls through to the retry/fallback path.  Do not
+  use broad placeholder tags like "general" — leave intent_tags=[] instead.
+
 Cat 11 gate reference
 ---------------------
 gate_1  Conditional truth — answer is only correct when a condition is met
@@ -172,6 +198,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2025, 10, 1),
         cat11_gate="gate_1",
         domains=["subscription_management"],
+        intent_tags=["subscription_downgrade"],  # deferral logic only matters in subscription_downgrade convos
     ))
 
     chunks.append(KBChunk(
@@ -187,6 +214,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2025, 8, 1),
         cat11_gate="gate_1",
         domains=["data_management"],
+        intent_tags=["data_export_request"],  # export timing/thresholds only relevant in data_export_request convos
         claims={"export_immediate_threshold_records": 1000000, "export_max_wait_hours": 48},
     ))
 
@@ -203,6 +231,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2026, 2, 1),
         cat11_gate="gate_1",
         domains=["api_and_webhooks"],
+        intent_tags=["api_usage_question"],  # rate limit numbers are only relevant in api_usage_question convos
         claims={"rate_limit_standard_per_min": 1000, "rate_limit_enterprise_per_min": 10000},
     ))
 
@@ -219,6 +248,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2025, 11, 1),
         cat11_gate="gate_1",
         domains=["subscription_management"],
+        intent_tags=["subscription_upgrade"],  # mid-cycle proration is specific to seat addition/upgrade scenarios
     ))
 
     # =========================================================================
@@ -262,6 +292,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2025, 7, 1),
         counterintuitive=True,
         cat11_gate="gate_2",
+        intent_tags=["account_access_issue"],  # SSO enforcement details only surface in account access conversations
         domains=["account_access"],
         claims={"sso_enforcement": "per_user_opt_in", "sso_org_level_enforced": False},
         metadata={
@@ -397,6 +428,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2026, 1, 1),
         cat11_gate="gate_4",
         domains=["api_and_webhooks"],
+        intent_tags=["webhook_configuration"],  # endpoint setup requirements only relevant in webhook_configuration convos
         claims={"webhook_protocol": "https", "webhook_response_timeout_seconds": 10, "webhook_success_code": 200},
         metadata={"multi_hop_partner": "kb_chunk_webhook_retry_policy_v3"},
     ))
@@ -414,6 +446,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2026, 1, 1),
         cat11_gate="gate_4",
         domains=["api_and_webhooks"],
+        intent_tags=["webhook_configuration"],  # retry schedule only relevant in webhook_configuration convos
         claims={"webhook_retry_schedule_minutes": [5, 30, 120], "webhook_retry_on_failure": "dead_letter"},
         metadata={"multi_hop_partner": "kb_chunk_webhook_config_v3"},
     ))
@@ -754,6 +787,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
             constraint_type=ConstraintType.INFORMATIONAL,
             effective_date=date(2026, 2, 1),
             domains=["api_and_webhooks", "account_access"],
+            intent_tags=["api_usage_question"],  # token generation/revocation is specific to api_usage_question
         ),
         KBChunk(
             chunk_id="kb_chunk_sso_saml_setup_v1",
@@ -767,6 +801,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
             constraint_type=ConstraintType.INFORMATIONAL,
             effective_date=date(2025, 7, 1),
             domains=["account_access"],
+            intent_tags=["account_access_issue"],  # SAML IdP configuration only surfaces in account_access_issue convos
             claims={"sso_protocol": "saml_2.0", "sso_available_plans": ["starter", "growth", "enterprise"], "supported_idps": ["okta", "google_workspace", "entra_id"]},
         ),
         KBChunk(
@@ -781,6 +816,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
             constraint_type=ConstraintType.INFORMATIONAL,
             effective_date=date(2025, 7, 1),
             domains=["account_access"],
+            intent_tags=["account_access_issue"],  # password reset steps are specific to account_access_issue convos
             claims={"password_reset_link_validity_hours": 24, "sso_users_use_idp_for_reset": True},
         ),
         KBChunk(
@@ -1086,6 +1122,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2026, 1, 1),
         cat11_gate="gate_8",
         domains=["technical_issue"],
+        intent_tags=["diagnostic_access"],  # self-service vs support-only diagnostics — narrow enough to warrant a tag
         claims={
             "customer_self_service_diagnostics": [
                 "connectivity_ping_test",
@@ -1318,6 +1355,7 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2026, 1, 1),
         cat11_gate="gate_8",
         domains=["technical_issue", "api_and_webhooks"],
+        intent_tags=["webhook_configuration"],  # Dead Letter log + replay auth — specific to webhook_configuration
         claims={
             "customer_can_access": "dead_letter_log_read_only",
             "customer_cannot_do": "self_service_webhook_replay",

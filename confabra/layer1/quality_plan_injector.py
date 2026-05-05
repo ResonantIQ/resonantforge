@@ -112,7 +112,19 @@ def _prose_directive_for_brand_voice(target: str, variant: str) -> str:
     )
 
 
-def _prose_directive_for_accuracy(label: AccuracyLabel, kb_chunk_ids: list[str]) -> str:
+def _render_chunk_blocks(header: str, chunks: list[KBChunk]) -> str:
+    """Render a labeled section of KB chunk content for inline prompt injection."""
+    if not chunks:
+        return ""
+    blocks = "\n---\n".join(f"[{c.chunk_id}]\n{c.chunk_text}" for c in chunks)
+    return f"\n\n{header}\n---\n{blocks}\n---"
+
+
+def _prose_directive_for_accuracy(
+    label: AccuracyLabel,
+    should_cite: list[KBChunk],
+    must_not_cite: list[KBChunk],
+) -> str:
     """
     Return a plain-English prose generation directive for the accuracy dimension.
 
@@ -120,30 +132,55 @@ def _prose_directive_for_accuracy(label: AccuracyLabel, kb_chunk_ids: list[str])
     the KB; overgeneralized claims omit a key constraint; conditional_applied claims
     correctly apply a policy condition to the customer's context; exact claims mirror
     the KB faithfully.
+
+    Chunk text is embedded inline so the LLM has the actual policy content to
+    ground its claims in — passing only chunk IDs produced zero-claim outputs.
     """
     if label.status == "contradicted":
-        return (
+        base = (
             "Agent should make a claim about refund/policy that directly contradicts the KB. "
-            "The claim should be specific and verifiable. "
-            f"The relevant KB chunks are: {kb_chunk_ids}."
+            "The claim should be specific and verifiable."
         )
+        base += _render_chunk_blocks("KB policy content to contradict:", should_cite)
+        return base
     if label.precision == "overgeneralized":
-        return (
+        base = (
             "Agent should make a claim that is technically supported by the KB but misses an important constraint. "
-            "For example, if the policy says 'refunds within 30 days for paid plans only', the agent says 'refunds are available'. "
-            f"The relevant KB chunks are: {kb_chunk_ids}."
+            "For example, if the policy says 'refunds within 30 days for paid plans only', the agent says 'refunds are available'."
         )
+        base += _render_chunk_blocks("Relevant KB policy content:", should_cite)
+        base += _render_chunk_blocks("Do not cite or mirror the following stale/adversarial content:", must_not_cite)
+        return base
     if label.precision == "conditional_applied":
-        return (
+        base = (
             "Agent should correctly apply the conditional from the KB to the customer's context. "
-            "The customer's situation triggers a condition in the policy; the agent must recognize and apply it. "
-            f"The relevant KB chunks are: {kb_chunk_ids}."
+            "The customer's situation triggers a condition in the policy; the agent must recognize and apply it."
         )
+        base += _render_chunk_blocks("Relevant KB policy content:", should_cite)
+        return base
     # supported, exact
-    return (
-        "Agent should make an accurate claim that exactly matches the KB policy, including all constraints. "
-        f"The relevant KB chunks are: {kb_chunk_ids}."
-    )
+    base = "Agent should make an accurate claim that exactly matches the KB policy, including all constraints."
+    base += _render_chunk_blocks("Relevant KB policy content:", should_cite)
+    base += _render_chunk_blocks("Do not cite or mirror the following stale/adversarial content:", must_not_cite)
+    return base
+
+
+def _chunk_satisfies_intent(chunk: KBChunk, event_intent: list[str]) -> bool:
+    """
+    Return True when the chunk's topic is plausibly covered by the event's intent.
+
+    Empty intent_tags matches any intent (backward compatible with pre-RFORGE-11
+    chunks).  A non-empty list requires at least one tag to intersect the event's
+    intent list — if there is no intersection the chunk is topically misaligned and
+    would generate a misleading training signal.
+
+    This function is the core of the satisfiability pre-check added in RFORGE-11.
+    It is deliberately simple: the caller (QualityPlanInjector._build_plan) handles
+    retry logic and the fallback to kb_required=[].
+    """
+    if not chunk.intent_tags:
+        return True
+    return any(tag in event_intent for tag in chunk.intent_tags)
 
 
 class QualityPlanInjector:
@@ -403,6 +440,33 @@ class QualityPlanInjector:
                 return pool[idx]
 
             picked = _pick_from(pick_pool_capped)
+
+            # --- Satisfiability pre-check (RFORGE-11) ---
+            # Verify that the picked allow-pool chunk's topic is plausibly covered by the
+            # event's intent.  If not, retry with up to N=2 additional RNG picks from the
+            # same capped pool, consuming additional RNG values from the seeded generator.
+            #
+            # Fallback policy: if all retries fail, drop kb_required to [].
+            # Wrong-chunk plans generate misleading training signal.  Skip rate may increase
+            # temporarily; data quality goes up.
+            #
+            # Seed note: the seed is preserved across runs but the result may differ from
+            # pre-fix runs if retries are triggered.  This is expected and intentional —
+            # the pre-fix runs produced topically misaligned plans; the post-fix runs do not.
+            event_intent: list[str] = conv_event.payload.get("intent", [])
+            _MAX_SATISFIABILITY_RETRIES = 2
+
+            if picked is not None and not _chunk_satisfies_intent(picked, event_intent):
+                retried: KBChunk | None = None
+                for _ in range(_MAX_SATISFIABILITY_RETRIES):
+                    candidate = _pick_from(pick_pool_capped)
+                    if candidate is not None and _chunk_satisfies_intent(candidate, event_intent):
+                        retried = candidate
+                        break
+                # If all retries failed, fall back to no required chunk rather than ship a
+                # mismatched plan that the accuracy validator will correctly flag as not_found.
+                picked = retried  # None if all retries exhausted
+
             picked_deny_chunk = _pick_from(deny_pool_for_must_not)
 
             allow_ids = [picked.chunk_id] if picked is not None else []
@@ -484,7 +548,10 @@ class QualityPlanInjector:
                 kb_required = allow_ids[:1]
                 multi_chunk = False
             rubric = RubricTarget(accuracy=label)
-            directives = _prose_directive_for_accuracy(label, all_candidate_ids[:3])
+            chunks_by_id = {c.chunk_id: c for c in kb_chunks}
+            should_cite_chunks = [chunks_by_id[cid] for cid in citations.should_cite if cid in chunks_by_id]
+            must_not_cite_chunks = [chunks_by_id[cid] for cid in citations.must_not_cite if cid in chunks_by_id]
+            directives = _prose_directive_for_accuracy(label, should_cite_chunks, must_not_cite_chunks)
             cat11_gate = (
                 "gate_1" if label.precision == "conditional_applied"
                 else "gate_3" if label.precision == "overgeneralized"

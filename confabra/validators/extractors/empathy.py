@@ -125,7 +125,6 @@ def extract_empathy_signals(
     """
     # 1. Find acknowledgment phrases
     ack_matches = _find_phrase_matches(agent_prose, acknowledgment_phrases)
-    acknowledgment_present = len(ack_matches) > 0
 
     # 2. Find emotional language
     emo_matches = _find_phrase_matches(agent_prose, emotion_lexicon)
@@ -135,15 +134,21 @@ def extract_empathy_signals(
     apology_matches = _find_phrase_matches(agent_prose, apology_lexicon)
     apology_present = len(apology_matches) > 0
 
+    # Apology bridge: a sincere apology satisfies acknowledgment the same way an
+    # acknowledgment phrase does — agents who lead with "I'm sorry" should not
+    # fail the empathy high gate solely because they didn't also hit ACKNOWLEDGMENT_PHRASES.
+    acknowledgment_present = len(ack_matches) > 0 or len(apology_matches) > 0
+
     # 4. Customer emotion referenced (emotion term near customer reference)
     customer_emotion_referenced = _check_customer_emotion_referenced(agent_prose, emotion_lexicon)
 
     # 5. Response length in tokens
     response_length_tokens = _count_tokens(agent_prose)
 
-    # 6. Follow-through (acknowledgment + action verb within window)
+    # 6. Follow-through: search from the union of ack + apology anchors so that
+    #    an agent who leads with "I'm sorry" can also satisfy follow_through.
     follow_through_present = _check_follow_through(
-        agent_prose, ack_matches, action_verb_lexicon, follow_through_window
+        agent_prose, ack_matches + apology_matches, action_verb_lexicon, follow_through_window
     )
 
     # 7. Fake empathy flag (derived)

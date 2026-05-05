@@ -628,6 +628,7 @@ def _make_skipped_record(
             for v in validator_verdicts
         ],
         agent_prose_snippet=prose[:200] if prose else None,
+        final_prose=prose if prose else None,
         kb_chunks_required=kb_chunks_required,
         timestamp=datetime.now(tz=timezone.utc).isoformat(),
     )
