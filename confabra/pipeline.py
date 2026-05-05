@@ -37,7 +37,12 @@ from confabra.layer1.quality_plan_injector import QualityPlanInjector
 from confabra.layer1.snapshot_emitter import SnapshotEmitter
 from confabra.layer1.state_machine import StateMachine
 from confabra.profiles import get_profile
-from confabra.utils.atomic_write import atomic_write_jsonl, atomic_write_text
+from confabra.utils.atomic_write import (
+    append_jsonl_line,
+    atomic_write_jsonl,
+    atomic_write_text,
+    read_jsonl_robust,
+)
 from confabra.schemas import (
     ConversationRecord,
     ConversationSignals,
@@ -1130,6 +1135,22 @@ def _run_pipeline_inner(
     all_conversations: list[ConversationRecord] = []
     skipped_records: list[SkippedConversationRecord] = []
 
+    # Paths for per-conv JSONL flush (written incrementally during Phase 3).
+    _convs_path = profile_dir / "conversations.jsonl"
+    _skipped_path = profile_dir / "skipped_conversations.jsonl"
+    _disagreements_path = profile_dir / "disagreements.jsonl"
+
+    # Touch all three JSONL files so they always exist after a run, even when
+    # zero records were written.  Prevents downstream tooling from having to
+    # distinguish "run produced no skips" from "run never got this far".
+    for _p in (_convs_path, _skipped_path, _disagreements_path):
+        _p.parent.mkdir(parents=True, exist_ok=True)
+        _p.touch()
+
+    # Tracks how many ledger records have been flushed so far (ledger grows
+    # asynchronously inside _generate_prose_for_chunk on FAIL verdicts).
+    _ledger_flushed = 0
+
     # Phase 3 progress display setup.
     total_convs = sum(1 for e in events if e.event_type == SimEventType.CONVERSATION_STARTED)
     _p3_passed = 0
@@ -1205,9 +1226,28 @@ def _run_pipeline_inner(
 
             if result is None:
                 _p3_skipped += 1
+                # Flush the skip record that _generate_prose_for_chunk appended
+                # to skipped_records so it survives an interrupt before Phase 5.
+                append_jsonl_line(_skipped_path, skipped_records[-1].model_dump_json())
             else:
                 _p3_passed += 1
+                # Apply contamination per-conv so flushed records include
+                # tone_variant.  Calling the batch function with a single-element
+                # list advances the injector's RNG identically to the former
+                # post-loop batch call (one RNG draw per conv, same order).
+                if len(bv_variants) >= 2:
+                    (result,) = injector_cc.contaminate_conversations([result])
                 all_conversations.append(result)
+                # Flush immediately so it survives an interrupt before Phase 5.
+                append_jsonl_line(_convs_path, result.model_dump_json())
+
+            # Flush any disagreement records added by this conv's FAIL verdicts.
+            while _ledger_flushed < len(ledger.records):
+                append_jsonl_line(
+                    _disagreements_path,
+                    ledger.records[_ledger_flushed].model_dump_json(),
+                )
+                _ledger_flushed += 1
 
             if _is_tty:
                 live.update(_p3_header_text())
@@ -1257,9 +1297,7 @@ def _run_pipeline_inner(
     )
     print(f"[confabra] {_cache_summary}")
 
-    # Apply cross-contamination to organic conversations.
-    if len(bv_variants) >= 2:
-        all_conversations = injector_cc.contaminate_conversations(all_conversations)
+    # Contamination is now applied per-conv during the Phase 3 loop above.
 
     # ==================================================================
     # Phase 4 — Corrections log
@@ -1282,38 +1320,59 @@ def _run_pipeline_inner(
     # ==================================================================
     _log(config, "Phase 5: artifact emission")
 
+    # ------------------------------------------------------------------
+    # Post-Phase-3 integrity check.
+    #
+    # conversations.jsonl, skipped_conversations.jsonl, and disagreements.jsonl
+    # were written incrementally during Phase 3.  Verify the on-disk line
+    # counts match the in-memory accumulators before we emit the manifest.
+    # A mismatch means a partial write was not fsynced, which should never
+    # happen with append_jsonl_line but is caught here defensively.
+    # ------------------------------------------------------------------
+    _disk_convs = read_jsonl_robust(_convs_path)
+    _disk_skipped = read_jsonl_robust(_skipped_path)
+    _disk_disagreements = read_jsonl_robust(_disagreements_path)
+    if len(_disk_convs) != len(all_conversations):
+        raise RuntimeError(
+            f"conversations.jsonl on-disk count {len(_disk_convs)} != "
+            f"in-memory count {len(all_conversations)} — possible partial write"
+        )
+    if len(_disk_skipped) != len(skipped_records):
+        raise RuntimeError(
+            f"skipped_conversations.jsonl on-disk count {len(_disk_skipped)} != "
+            f"in-memory count {len(skipped_records)} — possible partial write"
+        )
+    if len(_disk_disagreements) != len(ledger.records):
+        raise RuntimeError(
+            f"disagreements.jsonl on-disk count {len(_disk_disagreements)} != "
+            f"in-memory count {len(ledger.records)} — possible partial write"
+        )
+
     # Derive unique document count from KB chunks.
     kb_doc_paths = {chunk.document_path for chunk in kb_chunks}
     kb_doc_count = len(kb_doc_paths)
     kb_chunk_count = len(kb_chunks)
 
-    # Serialise events.
+    # Serialise events (Phase 1 data — written here for the first time).
     event_lines = [e.model_dump_json() for e in events]
     events_hash = _sha256_jsonl(event_lines)
     atomic_write_jsonl(profile_dir / "events.jsonl", event_lines)
 
-    # Serialise snapshots.
+    # Serialise snapshots (Phase 1 data — written here for the first time).
     snapshot_lines = [s.model_dump_json() for s in snapshots]
     snapshots_hash = _sha256_jsonl(snapshot_lines)
     atomic_write_jsonl(profile_dir / "snapshots.jsonl", snapshot_lines)
 
-    # Serialise conversations.
+    # Conversations, skipped, and disagreements were already written
+    # incrementally by Phase 3 (append_jsonl_line per conv).  Compute
+    # their hashes from the in-memory lists — same serialisation, same bytes.
     conv_lines = [c.model_dump_json() for c in all_conversations]
     conversations_hash = _sha256_jsonl(conv_lines)
-    atomic_write_jsonl(profile_dir / "conversations.jsonl", conv_lines)
 
-    # Serialise quality plans.
+    # Serialise quality plans (Phase 1 data — written here for the first time).
     plan_lines = [p.model_dump_json() for p in quality_plans]
     planted_quality_hash = _sha256_jsonl(plan_lines)
     atomic_write_jsonl(profile_dir / "planted_quality.jsonl", plan_lines)
-
-    # Serialise skipped conversation records (enriched with verdict/prose context).
-    skipped_lines = [r.model_dump_json() for r in skipped_records]
-    atomic_write_jsonl(profile_dir / "skipped_conversations.jsonl", skipped_lines)
-
-    # Serialise disagreement ledger (empty in dry-run or when no FAIL verdicts occurred).
-    disagreement_lines = [r.model_dump_json() for r in ledger.records]
-    atomic_write_jsonl(profile_dir / "disagreements.jsonl", disagreement_lines)
 
     # --- KB domain telemetry ---
     # kb_version: deterministic hash of sorted chunk_ids + chunk_text.

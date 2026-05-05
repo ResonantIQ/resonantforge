@@ -519,16 +519,15 @@ def check_invariants_cmd(profile: str) -> None:
 @click.option("--corpus", "corpus_dir", required=True, type=click.Path(exists=True, file_okay=False, path_type=Path), help="Corpus directory (the profile subdirectory, e.g. corpus/saas)")
 def inspect_skip(conversation_id: str, corpus_dir: Path) -> None:
     """Print full debug context for a skipped conversation."""
+    from confabra.utils.atomic_write import read_jsonl_robust
+
     skip_path = corpus_dir / "skipped_conversations.jsonl"
     if not skip_path.exists():
         console.print(f"[red]Error:[/red] {skip_path} not found")
         raise SystemExit(1)
 
     record: Optional[dict] = None
-    for line in skip_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        rec = json.loads(line)
+    for rec in read_jsonl_robust(skip_path):
         if rec.get("conversation_id") == conversation_id:
             record = rec
             break
