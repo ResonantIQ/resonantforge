@@ -1,5 +1,5 @@
 """
-Property-based tests for the Confabra corpus generator — 22 assertions.
+Property-based tests for the ResonantForge corpus generator — 22 assertions.
 
 All tests share a single session-scoped fixture that runs one dry-run
 SaaS corpus generation (no Anthropic API calls) into a temp directory.
@@ -25,8 +25,8 @@ from pathlib import Path
 
 import pytest
 
-from confabra.pipeline import PipelineConfig, run_pipeline
-from confabra.schemas import (
+from resonantforge.pipeline import PipelineConfig, run_pipeline
+from resonantforge.schemas import (
     ConversationRecord,
     DimensionVerdict,
     DisagreementRecord,
@@ -41,7 +41,7 @@ from confabra.schemas import (
     ValidationResult,
     ValidationVerdict,
 )
-from confabra.layer1.plan_validator import SkipRateTracker
+from resonantforge.layer1.plan_validator import SkipRateTracker
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -642,7 +642,7 @@ def test_cross_contamination_density(corpus: tuple[Path, Manifest]) -> None:
     profile_dir, _ = corpus
 
     # Verify the SaaS profile has ≥2 variants before asserting contamination.
-    from confabra.profiles import get_profile
+    from resonantforge.profiles import get_profile
     profile = get_profile("saas")
     bv_variants = profile.brand_voice_variants()
 
@@ -675,7 +675,7 @@ def test_concurrent_run_protection(tmp_path: Path) -> None:
     23b. Running with --force=True succeeds even when the target is non-empty.
     23c. The lockfile is removed on successful completion.
     """
-    from confabra.pipeline import PipelineConfig, run_pipeline
+    from resonantforge.pipeline import PipelineConfig, run_pipeline
 
     def _make_config(out_root: Path, force: bool = False) -> PipelineConfig:
         return PipelineConfig(
@@ -703,7 +703,7 @@ def test_concurrent_run_protection(tmp_path: Path) -> None:
     run_pipeline(_make_config(out1, force=True))
 
     # -- Assertion 23c: lockfile is removed after a successful run.
-    from confabra.pipeline import _lockfile_path
+    from resonantforge.pipeline import _lockfile_path
     lock = _lockfile_path(out1 / "saas")
     assert not lock.exists(), (
         f"Lockfile {lock} was not cleaned up after a successful run"
@@ -758,10 +758,10 @@ def test_skip_tracker_prose_fact_increments(tmp_path: Path) -> None:
     )
 
     with (
-        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
-        patch("confabra.pipeline.validate_all_dimensions", return_value=[]),
+        patch("resonantforge.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("resonantforge.pipeline.validate_all_dimensions", return_value=[]),
         patch(
-            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            "resonantforge.layer1.plan_validator.PlanValidator.post_generation_validate",
             return_value=_skip_result,
         ),
     ):
@@ -844,13 +844,13 @@ def test_disagreement_ledger_populated(tmp_path: Path) -> None:
     )
 
     with (
-        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
-        patch("confabra.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
+        patch("resonantforge.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("resonantforge.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
         patch(
-            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            "resonantforge.layer1.plan_validator.PlanValidator.post_generation_validate",
             return_value=_skip_result,
         ),
-        patch("confabra.pipeline.run_soft_judge", return_value=_disagree_record),
+        patch("resonantforge.pipeline.run_soft_judge", return_value=_disagree_record),
     ):
         config = PipelineConfig(
             profile_name="saas",
@@ -917,10 +917,10 @@ def test_skipped_record_fields_complete(tmp_path: Path) -> None:
     )
 
     with (
-        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
-        patch("confabra.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
+        patch("resonantforge.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("resonantforge.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
         patch(
-            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            "resonantforge.layer1.plan_validator.PlanValidator.post_generation_validate",
             return_value=_skip_result,
         ),
     ):
@@ -1089,7 +1089,7 @@ def test_chunk_satisfies_intent_empty_tags_matches_any() -> None:
     This validates the backward-compatibility guarantee: all pre-RFORGE-11 chunks
     that have no intent_tags are eligible for any event regardless of its intent.
     """
-    from confabra.layer1.quality_plan_injector import _chunk_satisfies_intent
+    from resonantforge.layer1.quality_plan_injector import _chunk_satisfies_intent
 
     # Build a minimal KBChunk with no intent_tags (the default).
     chunk = KBChunk(
@@ -1128,7 +1128,7 @@ def test_chunk_satisfies_intent_tag_intersection() -> None:
     This validates the core filtering behavior: tagged chunks are only eligible when
     the event's intent overlaps with the chunk's declared topic.
     """
-    from confabra.layer1.quality_plan_injector import _chunk_satisfies_intent
+    from resonantforge.layer1.quality_plan_injector import _chunk_satisfies_intent
 
     chunk = KBChunk(
         chunk_id="kb_chunk_ti_webhook_error_allow_deny_v1",
@@ -1171,7 +1171,7 @@ def test_satisfiability_check_retries_on_mismatch() -> None:
     must not select the webhook chunk and must eventually pick the untagged chunk.
     """
     import random as _random
-    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from resonantforge.layer1.quality_plan_injector import QualityPlanInjector
     from datetime import datetime, timezone as _tz
 
     # Webhook chunk — will fail the satisfiability check for api_usage_question.
@@ -1215,7 +1215,7 @@ def test_satisfiability_check_retries_on_mismatch() -> None:
     injector = QualityPlanInjector(rng=rng, profile_name="saas")
 
     # Call _build_plan with a spec that will trigger chunk selection.
-    spec = {"type": "accuracy", "label": __import__("confabra.schemas", fromlist=["AccuracyLabel"]).AccuracyLabel(status="supported", precision="exact")}
+    spec = {"type": "accuracy", "label": __import__("resonantforge.schemas", fromlist=["AccuracyLabel"]).AccuracyLabel(status="supported", precision="exact")}
     plan = injector._build_plan(
         conv_event=event,
         account_snap=None,
@@ -1242,7 +1242,7 @@ def test_satisfiability_fallback_drops_kb_required() -> None:
     plans from a training-signal perspective.
     """
     import random as _random
-    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from resonantforge.layer1.quality_plan_injector import QualityPlanInjector
     from datetime import datetime, timezone as _tz
 
     # All chunks are tagged — none will match "api_usage_question".
@@ -1292,7 +1292,7 @@ def test_satisfiability_fallback_drops_kb_required() -> None:
     rng = _random.Random(42)
     injector = QualityPlanInjector(rng=rng, profile_name="saas")
 
-    _AccuracyLabel = __import__("confabra.schemas", fromlist=["AccuracyLabel"]).AccuracyLabel
+    _AccuracyLabel = __import__("resonantforge.schemas", fromlist=["AccuracyLabel"]).AccuracyLabel
     spec = {"type": "accuracy", "label": _AccuracyLabel(status="supported", precision="exact")}
 
     # Must not raise — fallback produces a valid plan with empty kb_chunks_required.
@@ -1325,8 +1325,8 @@ def test_conv_evt_00161_pattern_no_longer_mismatches() -> None:
     selection for an api_usage_question event.
     """
     import random as _random
-    from confabra.layer1.quality_plan_injector import QualityPlanInjector
-    from confabra.kb.saas_content import get_saas_kb_chunks
+    from resonantforge.layer1.quality_plan_injector import QualityPlanInjector
+    from resonantforge.kb.saas_content import get_saas_kb_chunks
     from datetime import datetime, timezone as _tz
 
     # Reconstruct the event pattern that triggered the original mismatch.
@@ -1358,7 +1358,7 @@ def test_conv_evt_00161_pattern_no_longer_mismatches() -> None:
     for seed in _PROBE_SEEDS:
         rng = _random.Random(seed)
         injector = QualityPlanInjector(rng=rng, profile_name="saas")
-        _AccuracyLabel = __import__("confabra.schemas", fromlist=["AccuracyLabel"]).AccuracyLabel
+        _AccuracyLabel = __import__("resonantforge.schemas", fromlist=["AccuracyLabel"]).AccuracyLabel
         spec = {"type": "accuracy", "label": _AccuracyLabel(status="supported", precision="exact")}
 
         plan = injector._build_plan(
@@ -1406,10 +1406,10 @@ def test_pipeline_aborts_on_hard_gate(tmp_path: Path) -> None:
     )
 
     with (
-        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
-        patch("confabra.pipeline.validate_all_dimensions", return_value=[]),
+        patch("resonantforge.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("resonantforge.pipeline.validate_all_dimensions", return_value=[]),
         patch(
-            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            "resonantforge.layer1.plan_validator.PlanValidator.post_generation_validate",
             return_value=_skip_result,
         ),
     ):
@@ -1459,7 +1459,7 @@ def test_pipeline_aborts_on_hard_gate(tmp_path: Path) -> None:
 def _make_injector(seed: int = 42) -> "QualityPlanInjector":
     """Return a seeded QualityPlanInjector for engine tests."""
     import random as _random
-    from confabra.layer1.quality_plan_injector import QualityPlanInjector
+    from resonantforge.layer1.quality_plan_injector import QualityPlanInjector
     return QualityPlanInjector(rng=_random.Random(seed), profile_name="saas")
 
 
@@ -1471,7 +1471,7 @@ def _make_conv_event(
 ) -> SimEvent:
     """Build a minimal CONVERSATION_STARTED SimEvent for injector testing."""
     from datetime import datetime as _dt
-    from confabra.schemas import SimEventType as _SET
+    from resonantforge.schemas import SimEventType as _SET
     etype = _SET(event_type_override) if event_type_override else _SET.CONVERSATION_STARTED
     return SimEvent(
         event_id=event_id,
@@ -1493,7 +1493,7 @@ def _make_conv_event(
 def _make_snapshot(account_id: str = "acct_001") -> "DaySnapshot":
     """Build a minimal DaySnapshot for injector testing."""
     from datetime import date as _date
-    from confabra.schemas import (
+    from resonantforge.schemas import (
         DaySnapshot as _DS,
         HealthState as _HS,
         LifecycleStage as _LS,
@@ -1521,8 +1521,8 @@ def test_engine_domain_isolation() -> None:
 
     Tests billing, api, and refunds in turn using accuracy-type plan specs.
     """
-    from confabra.layer1.quality_plan_injector import QualityPlanInjector
-    from confabra.schemas import AccuracyLabel
+    from resonantforge.layer1.quality_plan_injector import QualityPlanInjector
+    from resonantforge.schemas import AccuracyLabel
     from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
 
     # Build a chunk lookup for assertion.
@@ -1559,7 +1559,7 @@ def test_engine_adversarial_exclusion_default() -> None:
     """
     E2 — Without explicit opt-in, no should_cite chunk is adversarial.
     """
-    from confabra.schemas import AccuracyLabel
+    from resonantforge.schemas import AccuracyLabel
     from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
 
     chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
@@ -1591,8 +1591,8 @@ def test_engine_adversarial_inclusion_when_opted_in() -> None:
     may appear in should_cite for a domain that has adversarial chunks.
     """
     import random as _random
-    from confabra.layer1.quality_plan_injector import QualityPlanInjector
-    from confabra.schemas import AccuracyLabel
+    from resonantforge.layer1.quality_plan_injector import QualityPlanInjector
+    from resonantforge.schemas import AccuracyLabel
     from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
 
     chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
@@ -1634,8 +1634,8 @@ def test_engine_within_topic_normalization() -> None:
     75 selections (100 * 75% as an extreme upper bound for ~50/50 distribution).
     """
     import random as _random
-    from confabra.layer1.quality_plan_injector import QualityPlanInjector
-    from confabra.schemas import AccuracyLabel
+    from resonantforge.layer1.quality_plan_injector import QualityPlanInjector
+    from resonantforge.schemas import AccuracyLabel
     from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
 
     N = 100
@@ -1669,7 +1669,7 @@ def test_engine_determinism_with_domain() -> None:
     """
     E5 — Same seed produces identical chunk selections for a domain-specific plan.
     """
-    from confabra.schemas import AccuracyLabel
+    from resonantforge.schemas import AccuracyLabel
     from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
 
     def _run_plan(seed: int) -> list[str]:
@@ -1698,7 +1698,7 @@ def test_engine_fallback_on_no_candidates() -> None:
     graceful-fallback behavior introduced to keep the legacy state machine compatible
     with the newly domain-tagged KB.
     """
-    from confabra.schemas import AccuracyLabel
+    from resonantforge.schemas import AccuracyLabel
     from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
 
     injector = _make_injector()
@@ -1717,13 +1717,13 @@ def test_engine_raise_on_unrecognized_event_type() -> None:
     E7 — ValueError is raised when the trigger event type is not in the
     eligible allowlist (e.g. account_created going through the injector).
     """
-    from confabra.schemas import AccuracyLabel
+    from resonantforge.schemas import AccuracyLabel
     from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
 
     injector = _make_injector()
     # Build an ACCOUNT_CREATED event — not eligible for injection.
     from datetime import datetime as _dt
-    from confabra.schemas import SimEventType as _SET
+    from resonantforge.schemas import SimEventType as _SET
     non_conv_event = SimEvent(
         event_id="evt_e7",
         event_type=_SET.ACCOUNT_CREATED,
@@ -1765,7 +1765,7 @@ def test_engine_manifest_fields_populated(tmp_path: Path) -> None:
     _kb_hash = hashlib.sha256("\n".join(_chunk_lines).encode()).hexdigest()
 
     with patch(
-        "confabra.pipeline.generate_kb",
+        "resonantforge.pipeline.generate_kb",
         return_value=(SYNTHETIC_KB_CHUNKS, _kb_hash),
     ):
         config = PipelineConfig(
@@ -1811,7 +1811,7 @@ def test_accuracy_directive_contains_chunk_text() -> None:
     This regression test would have caught the original bug where only chunk IDs
     were passed to the prose directive, leaving the LLM with no content to cite.
     """
-    from confabra.schemas import AccuracyLabel
+    from resonantforge.schemas import AccuracyLabel
     from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
 
     chunk_by_id = {c.chunk_id: c for c in SYNTHETIC_KB_CHUNKS}
@@ -1859,7 +1859,7 @@ def test_accuracy_directive_contains_chunk_text() -> None:
 
 def test_kb_domain_tag_completeness_existing() -> None:
     """Every existing KB chunk must have at least one domain tag after PR2."""
-    from confabra.kb.saas_content import get_saas_kb_chunks
+    from resonantforge.kb.saas_content import get_saas_kb_chunks
     chunks = get_saas_kb_chunks()
     untagged = [c.chunk_id for c in chunks if not c.domains]
     assert not untagged, f"Chunks missing domain tags: {untagged}"
@@ -1867,7 +1867,7 @@ def test_kb_domain_tag_completeness_existing() -> None:
 
 def test_adversarial_chunks_marked_correctly() -> None:
     """All adversarial KB fixtures must have adversarial=True set on the KBChunk model field."""
-    from confabra.kb.saas_content import get_saas_kb_chunks
+    from resonantforge.kb.saas_content import get_saas_kb_chunks
     EXPECTED_ADVERSARIAL = {
         "kb_chunk_refund_eligibility_timelines_v1",
         "kb_chunk_refund_grace_period_stale_v1",
@@ -1892,8 +1892,8 @@ def test_invariant_checker_passes_existing_kb() -> None:
     If this fails, the existing KB has internal contradictions that must be
     resolved before PR3 adds new chunks. Surface errors — do not suppress them.
     """
-    from confabra.kb.saas_content import get_saas_kb_chunks
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.kb.saas_content import get_saas_kb_chunks
+    from resonantforge.validators.invariant_checker import run_checker
     chunks = get_saas_kb_chunks()
     report = run_checker(chunks)
     assert not report.errors, (
@@ -1907,7 +1907,7 @@ def test_chunks_with_claims_are_well_formed() -> None:
     Every KB chunk with non-empty claims must have well-formed claim values.
     Claims must be a dict of str keys mapping to non-None primitive values or lists.
     """
-    from confabra.kb.saas_content import get_saas_kb_chunks
+    from resonantforge.kb.saas_content import get_saas_kb_chunks
     chunks = get_saas_kb_chunks()
     malformed = []
     for c in chunks:
@@ -1938,7 +1938,7 @@ def _make_chunk(
     claims: dict | None = None,
     adversarial: bool = False,
 ) -> "KBChunk":
-    from confabra.schemas import ConstraintType, KBChunk
+    from resonantforge.schemas import ConstraintType, KBChunk
     return KBChunk(
         chunk_id=chunk_id,
         document_id=document_id,
@@ -1960,7 +1960,7 @@ def test_cross_chunk_contradiction_not_flagged() -> None:
     This test prevents any future change from re-introducing a cross-chunk
     claim-comparison rule. The invariant checker is single-chunk-scoped.
     """
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk_a = _make_chunk(
         chunk_id="test_export_a",
@@ -1998,7 +1998,7 @@ def test_cross_chunk_contradiction_not_flagged() -> None:
 
 def test_tier_vocab_claim_non_canonical_value_errors() -> None:
     """Claim with tier-like string value 'Standard' (non-canonical) must error."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_claim_standard",
@@ -2011,7 +2011,7 @@ def test_tier_vocab_claim_non_canonical_value_errors() -> None:
 
 def test_tier_vocab_claim_lowercase_canonical_errors() -> None:
     """Claim with lowercase canonical tier name 'starter' (case drift) must error."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_claim_lowercase",
@@ -2024,7 +2024,7 @@ def test_tier_vocab_claim_lowercase_canonical_errors() -> None:
 
 def test_tier_vocab_text_non_canonical_before_plan_errors() -> None:
     """Text containing 'upgrade to the Standard plan' must flag a tier-vocab error."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_standard_plan",
@@ -2036,7 +2036,7 @@ def test_tier_vocab_text_non_canonical_before_plan_errors() -> None:
 
 def test_tier_vocab_text_non_canonical_in_list_errors() -> None:
     """Text containing 'the Standard, Growth, or Enterprise tier' must flag Standard."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_standard_in_list",
@@ -2051,7 +2051,7 @@ def test_tier_vocab_text_non_canonical_in_list_errors() -> None:
 
 def test_tier_vocab_compound_word_not_flagged() -> None:
     """Text with 'enterprise-grade security and growth in user adoption' must not flag."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_compound",
@@ -2064,7 +2064,7 @@ def test_tier_vocab_compound_word_not_flagged() -> None:
 
 def test_tier_vocab_premium_support_not_flagged() -> None:
     """'premium support' must not flag — 'support' is not a tier-context word."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_premium_support",
@@ -2077,7 +2077,7 @@ def test_tier_vocab_premium_support_not_flagged() -> None:
 
 def test_tier_vocab_free_trial_not_flagged() -> None:
     """'a free trial' must not flag — 'trial' is not a tier-context word."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_free_trial",
@@ -2090,7 +2090,7 @@ def test_tier_vocab_free_trial_not_flagged() -> None:
 
 def test_tier_vocab_basic_understanding_not_flagged() -> None:
     """'basic understanding' must not flag — non-tier usage of 'basic'."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_basic_understanding",
@@ -2103,7 +2103,7 @@ def test_tier_vocab_basic_understanding_not_flagged() -> None:
 
 def test_tier_vocab_standard_or_enterprise_flags() -> None:
     """'Standard or Enterprise' (no Growth in between) must flag 'Standard'."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_standard_or_enterprise",
@@ -2115,7 +2115,7 @@ def test_tier_vocab_standard_or_enterprise_flags() -> None:
 
 def test_tier_vocab_pro_pricing_flags() -> None:
     """'Pro pricing' must flag — 'Pro' before a tier-context word."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_pro_pricing",
@@ -2127,7 +2127,7 @@ def test_tier_vocab_pro_pricing_flags() -> None:
 
 def test_tier_vocab_lowercase_standard_plan_flags() -> None:
     """'the standard plan' (lowercase) must flag — case drift on non-canonical name."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_lowercase_standard_plan",
@@ -2139,7 +2139,7 @@ def test_tier_vocab_lowercase_standard_plan_flags() -> None:
 
 def test_tier_vocab_canonical_names_not_flagged() -> None:
     """Text 'available on Starter, Growth, and Enterprise' must not flag."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_text_canonical_list",
@@ -2152,7 +2152,7 @@ def test_tier_vocab_canonical_names_not_flagged() -> None:
 
 def test_tier_vocab_canonical_claim_not_flagged() -> None:
     """Claim with canonical tier value 'Enterprise' must not flag."""
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunk = _make_chunk(
         chunk_id="test_tier_claim_enterprise",
@@ -2171,8 +2171,8 @@ def test_invariant_checker_zero_warnings_existing_kb() -> None:
 
     Zero warnings (not just zero errors) is the PR2.5 completion criterion.
     """
-    from confabra.kb.saas_content import get_saas_kb_chunks
-    from confabra.validators.invariant_checker import run_checker
+    from resonantforge.kb.saas_content import get_saas_kb_chunks
+    from resonantforge.validators.invariant_checker import run_checker
 
     chunks = get_saas_kb_chunks()
     report = run_checker(chunks)
@@ -2201,9 +2201,9 @@ _SM_SMALL_ACCOUNTS = 5   # used for determinism / sequence tests only
 
 def _collect_conv_domains(seed: int, accounts: int, months: int) -> list[str]:
     """Run the state machine and return the domain for each CONVERSATION_STARTED event."""
-    from confabra.layer1.state_machine import StateMachine
-    from confabra.profiles import get_profile
-    from confabra.schemas import SimEventType
+    from resonantforge.layer1.state_machine import StateMachine
+    from resonantforge.profiles import get_profile
+    from resonantforge.schemas import SimEventType
 
     profile = get_profile("saas")
     sm = StateMachine(seed=seed, num_accounts=accounts, num_months=months, profile=profile)
@@ -2224,7 +2224,7 @@ def test_state_machine_all_domains_reachable() -> None:
     expected count is ~54, so non-appearance would indicate a configuration bug,
     not bad luck.
     """
-    from confabra.profiles import get_profile
+    from resonantforge.profiles import get_profile
 
     profile = get_profile("saas")
     expected_domains = set(profile.domain_weights().keys())
@@ -2274,7 +2274,7 @@ def test_state_machine_domain_distribution_vs_profile_weights() -> None:
     distributions (e.g. weight table mis-keyed) without being brittle to normal
     stochastic variation.
     """
-    from confabra.profiles import get_profile
+    from resonantforge.profiles import get_profile
 
     profile = get_profile("saas")
     weights = profile.domain_weights()
@@ -2347,10 +2347,10 @@ def test_skipped_conversations_have_final_prose(tmp_path: Path) -> None:
     )
 
     with (
-        patch("confabra.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
-        patch("confabra.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
+        patch("resonantforge.pipeline._call_anthropic", return_value=(_FAKE_PROSE, 0, 0)),
+        patch("resonantforge.pipeline.validate_all_dimensions", return_value=[_fail_verdict]),
         patch(
-            "confabra.layer1.plan_validator.PlanValidator.post_generation_validate",
+            "resonantforge.layer1.plan_validator.PlanValidator.post_generation_validate",
             return_value=_skip_result,
         ),
     ):
@@ -2411,7 +2411,7 @@ def test_strip_markdown_fence_removes_json_wrapper() -> None:
       c) Plain ```-wrapped — fence stripped, raw JSON returned.
       d) Whitespace-padded raw JSON — leading/trailing whitespace removed.
     """
-    from confabra.validators.extractors.accuracy import _strip_markdown_fence
+    from resonantforge.validators.extractors.accuracy import _strip_markdown_fence
 
     raw = '[{"claim_text": "hello"}]'
 
@@ -2445,7 +2445,7 @@ def test_extract_claims_handles_fenced_response() -> None:
     the extractor must return a non-empty claims list.
     """
     from unittest.mock import MagicMock
-    from confabra.validators.extractors.accuracy import extract_claims_llm
+    from resonantforge.validators.extractors.accuracy import extract_claims_llm
 
     fenced_response = '```json\n[{"claim_text": "tokens do not expire", "claim_span": [0, 22], "claim_type": "factual", "subject": "tokens", "predicate": "expire", "object": "no"}]\n```'
 
@@ -2477,7 +2477,7 @@ def test_extract_claims_logs_on_parse_failure(caplog: pytest.LogCaptureFixture) 
     import logging
     import pytest as _pytest
     from unittest.mock import MagicMock
-    from confabra.validators.extractors.accuracy import extract_claims_llm, ClaimExtractionError
+    from resonantforge.validators.extractors.accuracy import extract_claims_llm, ClaimExtractionError
 
     mock_message = MagicMock()
     mock_message.content = [MagicMock(text="THIS IS NOT JSON AT ALL")]
@@ -2486,7 +2486,7 @@ def test_extract_claims_logs_on_parse_failure(caplog: pytest.LogCaptureFixture) 
     mock_client = MagicMock()
     mock_client.messages.create.return_value = mock_message
 
-    with caplog.at_level(logging.WARNING, logger="confabra.validators.extractors.accuracy"):
+    with caplog.at_level(logging.WARNING, logger="resonantforge.validators.extractors.accuracy"):
         with _pytest.raises(ClaimExtractionError):
             extract_claims_llm("some agent prose", anthropic_client=mock_client, max_attempts=3)
 
@@ -2516,8 +2516,8 @@ def test_multi_chunk_required_uses_length() -> None:
     Assertion 33 — the early-exit path (no claims) previously used bool(kb_chunks_required),
     which is True for any non-empty list. It must now use len > 1, matching the happy path.
     """
-    from confabra.validators.extractors.accuracy import run_kb_alignment_pipeline
-    from confabra.schemas import KBChunk, ConstraintType
+    from resonantforge.validators.extractors.accuracy import run_kb_alignment_pipeline
+    from resonantforge.schemas import KBChunk, ConstraintType
 
     single_chunk_required = ["kb_chunk_api_authentication_v3"]
     dummy_chunk = KBChunk(
@@ -2559,7 +2559,7 @@ def test_extract_claims_handles_null_fields() -> None:
       34c — _normalize_text called with None directly → returns empty string (not crash)
     """
     from unittest.mock import MagicMock
-    from confabra.validators.extractors.accuracy import extract_claims_llm, _normalize_text
+    from resonantforge.validators.extractors.accuracy import extract_claims_llm, _normalize_text
 
     # 34c: direct guard on _normalize_text — must not raise
     assert _normalize_text(None, {}) == "", (  # type: ignore[arg-type]
@@ -2632,8 +2632,8 @@ def test_candidate_pool_is_required_chunks_only() -> None:
     never surface in alignment output regardless of claim content.
     """
     from unittest.mock import MagicMock
-    from confabra.validators.extractors.accuracy import run_kb_alignment_pipeline
-    from confabra.schemas import Claim, KBChunk, ConstraintType
+    from resonantforge.validators.extractors.accuracy import run_kb_alignment_pipeline
+    from resonantforge.schemas import Claim, KBChunk, ConstraintType
 
     required_ids = {"kb_chunk_required_a", "kb_chunk_required_b"}
     unrequired_ids = {"kb_chunk_unrequired_x", "kb_chunk_unrequired_y", "kb_chunk_unrequired_z"}
@@ -2691,8 +2691,8 @@ def test_required_chunk_always_in_pool() -> None:
     Before the fix, top-K truncation would silently exclude insertion-order index 55.
     After the fix, the required chunk is the *only* candidate regardless of position.
     """
-    from confabra.validators.extractors.accuracy import run_kb_alignment_pipeline
-    from confabra.schemas import Claim, KBChunk, ConstraintType
+    from resonantforge.validators.extractors.accuracy import run_kb_alignment_pipeline
+    from resonantforge.schemas import Claim, KBChunk, ConstraintType
 
     target_id = "kb_chunk_target_at_index_55"
 
@@ -2754,8 +2754,8 @@ def test_word_boundary_trigger_matching() -> None:
     'used up all quota' MUST match 'used'.
     'unused credits' must NOT match 'used' (substring inside 'unused').
     """
-    from confabra.validators.extractors.accuracy import _check_constraint_type_applies
-    from confabra.schemas import KBChunk, ConstraintType
+    from resonantforge.validators.extractors.accuracy import _check_constraint_type_applies
+    from resonantforge.schemas import KBChunk, ConstraintType
 
     deny_chunk = KBChunk(
         chunk_id="kb_chunk_deny_usage",
@@ -2797,8 +2797,8 @@ def test_organic_conversation_handles_empty_required() -> None:
     The pipeline must not attempt KB alignment and must return alignment='not_found'
     with all constraint flags False.
     """
-    from confabra.validators.extractors.accuracy import run_kb_alignment_pipeline
-    from confabra.schemas import Claim, KBChunk, ConstraintType
+    from resonantforge.validators.extractors.accuracy import run_kb_alignment_pipeline
+    from resonantforge.schemas import Claim, KBChunk, ConstraintType
 
     chunk = KBChunk(
         chunk_id="kb_chunk_some_policy",
@@ -2854,8 +2854,8 @@ def test_empathy_recognizes_sorry_youre_hitting() -> None:
     Phase 1A. Agents routinely use "hitting", "running into", and "seeing" for
     the same sentiment.
     """
-    from confabra.validators.extractors.empathy import extract_empathy_signals
-    from confabra.profiles.lexicons.saas import (
+    from resonantforge.validators.extractors.empathy import extract_empathy_signals
+    from resonantforge.profiles.lexicons.saas import (
         ACKNOWLEDGMENT_PHRASES, EMOTION_LEXICON, APOLOGY_LEXICON, ACTION_VERB_LEXICON,
     )
 
@@ -2882,8 +2882,8 @@ def test_empathy_recognizes_positive_warmth_terms() -> None:
     expressing positive warmth ("I'm glad we got this sorted") scored zero on
     emotional_language_present despite clear empathetic signal.
     """
-    from confabra.validators.extractors.empathy import extract_empathy_signals
-    from confabra.profiles.lexicons.saas import (
+    from resonantforge.validators.extractors.empathy import extract_empathy_signals
+    from resonantforge.profiles.lexicons.saas import (
         ACKNOWLEDGMENT_PHRASES, EMOTION_LEXICON, APOLOGY_LEXICON, ACTION_VERB_LEXICON,
     )
 
@@ -2910,8 +2910,8 @@ def test_empathy_walk_through_triggers_follow_through() -> None:
     "walk" was absent from ACTION_VERB_LEXICON. "let me walk you through this" is
     a canonical follow-through phrase in conversational support.
     """
-    from confabra.validators.extractors.empathy import extract_empathy_signals
-    from confabra.profiles.lexicons.saas import (
+    from resonantforge.validators.extractors.empathy import extract_empathy_signals
+    from resonantforge.profiles.lexicons.saas import (
         ACKNOWLEDGMENT_PHRASES, EMOTION_LEXICON, APOLOGY_LEXICON, ACTION_VERB_LEXICON,
     )
 
@@ -2939,8 +2939,8 @@ def test_empathy_apology_bridges_to_acknowledgment() -> None:
     high gate. Apologies are a superset of acknowledgments from a human empathy
     standpoint.
     """
-    from confabra.validators.extractors.empathy import extract_empathy_signals
-    from confabra.profiles.lexicons.saas import (
+    from resonantforge.validators.extractors.empathy import extract_empathy_signals
+    from resonantforge.profiles.lexicons.saas import (
         EMOTION_LEXICON, APOLOGY_LEXICON, ACTION_VERB_LEXICON,
     )
 
@@ -2970,8 +2970,8 @@ def test_resolution_recognizes_imperative_instructions() -> None:
     coverage of imperative instruction patterns (the dominant pattern in step-by-step
     LLM-generated support responses).
     """
-    from confabra.validators.extractors.resolution import extract_resolution_signals
-    from confabra.profiles.lexicons.saas import (
+    from resonantforge.validators.extractors.resolution import extract_resolution_signals
+    from resonantforge.profiles.lexicons.saas import (
         RESOLUTION_PATTERNS, DEFLECTION_PATTERNS, NEXT_STEPS_PATTERNS,
         TEMPORAL_ANCHOR_PATTERNS, SPECIFIC_ACTOR_PATTERNS, OWNERSHIP_PATTERNS,
         ISSUE_KEYWORDS,
@@ -3004,8 +3004,8 @@ def test_resolution_recognizes_hyphenated_temporal_range() -> None:
     word "minutes" was then not adjacent to the matched digit group, causing
     next_steps_actionable=False for well-written time-estimate responses.
     """
-    from confabra.validators.extractors.resolution import extract_resolution_signals
-    from confabra.profiles.lexicons.saas import (
+    from resonantforge.validators.extractors.resolution import extract_resolution_signals
+    from resonantforge.profiles.lexicons.saas import (
         RESOLUTION_PATTERNS, DEFLECTION_PATTERNS, NEXT_STEPS_PATTERNS,
         TEMPORAL_ANCHOR_PATTERNS, SPECIFIC_ACTOR_PATTERNS, OWNERSHIP_PATTERNS,
         ISSUE_KEYWORDS,

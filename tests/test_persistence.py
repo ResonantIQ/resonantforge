@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from confabra.pipeline import PipelineConfig, run_pipeline
-from confabra.utils.atomic_write import append_jsonl_line, read_jsonl_robust
+from resonantforge.pipeline import PipelineConfig, run_pipeline
+from resonantforge.utils.atomic_write import append_jsonl_line, read_jsonl_robust
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -68,7 +68,7 @@ def test_mid_phase3_interrupt_leaves_recoverable_corpus(tmp_path: Path) -> None:
         _original_append(path, line)
 
     with mock.patch(
-        "confabra.pipeline.append_jsonl_line", side_effect=_patched_append
+        "resonantforge.pipeline.append_jsonl_line", side_effect=_patched_append
     ):
         with pytest.raises(KeyboardInterrupt):
             run_pipeline(_minimal_config(tmp_path))

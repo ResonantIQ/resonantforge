@@ -16,12 +16,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from confabra.validators.extractors.accuracy import (
+from resonantforge.validators.extractors.accuracy import (
     ClaimExtractionError,
     extract_claims_llm,
 )
-from confabra.validators.rule_engine import validate_all_dimensions
-from confabra.schemas import (
+from resonantforge.validators.rule_engine import validate_all_dimensions
+from resonantforge.schemas import (
     AccuracyLabel,
     DimensionVerdict,
     ValidationVerdict,

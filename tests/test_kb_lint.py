@@ -22,7 +22,7 @@ import warnings
 import pytest
 
 from tests.fixtures.synthetic_kb import SYNTHETIC_KB_CHUNKS
-from confabra.kb.saas_content import get_saas_kb_chunks
+from resonantforge.kb.saas_content import get_saas_kb_chunks
 
 
 # ---------------------------------------------------------------------------

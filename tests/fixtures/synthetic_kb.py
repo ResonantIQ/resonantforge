@@ -14,7 +14,7 @@ Adversarial distribution:
 
 from __future__ import annotations
 
-from confabra.schemas import ConstraintType, KBChunk
+from resonantforge.schemas import ConstraintType, KBChunk
 
 SYNTHETIC_KB_CHUNKS: list[KBChunk] = [
     # -----------------------------------------------------------------------

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "confabra"
+name = "resonantforge"
 version = "0.2.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-confabra = "confabra.cli:cli"
+rforge = "resonantforge.cli:cli"
 
 [tool.hatch.build.targets.wheel]
-packages = ["confabra"]
+packages = ["resonantforge"]

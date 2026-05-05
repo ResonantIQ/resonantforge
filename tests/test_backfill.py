@@ -19,7 +19,7 @@ from collections import Counter
 
 import pytest
 
-from confabra.layer1.coverage_backfill import CoverageBackfill, DEFAULT_MIN_EVENTS
+from resonantforge.layer1.coverage_backfill import CoverageBackfill, DEFAULT_MIN_EVENTS
 
 
 # ---------------------------------------------------------------------------
@@ -505,7 +505,7 @@ def test_pipeline_manifest_has_backfill_fields(tmp_path) -> None:
     This is an integration test: it runs the actual pipeline (no LLM calls)
     and checks the returned Manifest object.
     """
-    from confabra.pipeline import PipelineConfig, run_pipeline
+    from resonantforge.pipeline import PipelineConfig, run_pipeline
 
     config = PipelineConfig(
         profile_name="saas",

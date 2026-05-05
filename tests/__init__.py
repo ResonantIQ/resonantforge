@@ -1,1 +1,1 @@
-"""Confabra test suite."""
+"""ResonantForge test suite."""

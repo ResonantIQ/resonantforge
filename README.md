@@ -1,10 +1,10 @@
-# Confabra
+# ResonantForge
 
 Deterministic synthetic customer-conversation corpus generator for the Resonant IQ intelligence test harness.
 
 ## Overview
 
-Confabra generates a reproducible corpus of customer-support conversations with planted quality signals, KB citations, agent trajectories, and human corrections. Given the same `--seed`, it produces bit-for-bit identical output, enabling CI-stable regression tests for every intelligence algorithm built on top of it.
+ResonantForge generates a reproducible corpus of customer-support conversations with planted quality signals, KB citations, agent trajectories, and human corrections. Given the same `--seed`, it produces bit-for-bit identical output, enabling CI-stable regression tests for every intelligence algorithm built on top of it.
 
 ## Requirements
 
@@ -16,13 +16,13 @@ Confabra generates a reproducible corpus of customer-support conversations with 
 ```bash
 cd harness
 pip install -e .
-confabra --help
+rforge --help
 ```
 
 ## Structure
 
 ```
-confabra/
+resonantforge/
   schemas.py          # All Pydantic v2 data models (source of truth)
   cli.py              # Click CLI entry point
   layer1/             # Account simulation engine (event stream)
