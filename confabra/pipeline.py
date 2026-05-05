@@ -42,6 +42,7 @@ from confabra.schemas import (
     ConversationRecord,
     ConversationSignals,
     DaySnapshot,
+    DimensionVerdict,
     GateSeverity,
     GateViolation,
     KBChunk,
@@ -54,7 +55,7 @@ from confabra.schemas import (
 )
 from confabra.tenant_config.generator import generate_tenant_config
 from confabra.validators.disagreement_ledger import DisagreementLedger, run_soft_judge
-from confabra.validators.extractors.accuracy import extract_accuracy_signals
+from confabra.validators.extractors.accuracy import ClaimExtractionError, extract_accuracy_signals
 from confabra.validators.extractors.brand_voice import extract_brand_voice_signals
 from confabra.validators.extractors.empathy import extract_empathy_signals
 from confabra.validators.extractors.resolution import extract_resolution_signals
@@ -814,18 +815,34 @@ def _generate_prose_for_chunk(
                 lexicons.contraction_patterns,
             )
             _progress("validating accuracy")
-            accuracy_signals = extract_accuracy_signals(
-                agent_prose,
-                customer_prose,
-                kb_chunks,
-                quality_plan.kb_chunks_required,
-                lexicons.synonym_map,
-                anthropic_client=anthropic_client,
-            )
+            claim_extraction_error: ClaimExtractionError | None = None
+            try:
+                accuracy_signals = extract_accuracy_signals(
+                    agent_prose,
+                    customer_prose,
+                    kb_chunks,
+                    quality_plan.kb_chunks_required,
+                    lexicons.synonym_map,
+                    anthropic_client=anthropic_client,
+                )
+            except ClaimExtractionError as exc:
+                _log(
+                    config,
+                    f"  CLAIM EXTRACTION FAIL {conv_id}: "
+                    f"attempts={exc.attempts}, "
+                    f"excerpt={exc.raw_excerpt[:200]!r}",
+                )
+                accuracy_signals = None
+                claim_extraction_error = exc
 
-            signals = _build_conversation_signals(
-                conv_id, empathy_signals, resolution_signals, brand_voice_signals, accuracy_signals
-            )
+            # Skip signal assembly when accuracy extraction failed — post_generation_validate
+            # handles signals=None by treating the attempt as FAIL / eventually SKIP.
+            if accuracy_signals is not None:
+                signals = _build_conversation_signals(
+                    conv_id, empathy_signals, resolution_signals, brand_voice_signals, accuracy_signals
+                )
+            else:
+                signals = None
 
             # OQ2: use brand_voice_against from quality plan, default to bv_baseline.
             variant_id = quality_plan.rubric_targets.brand_voice_against or "bv_baseline"
@@ -840,6 +857,20 @@ def _generate_prose_for_chunk(
                 variant_id,
                 feature_profiles,
             )
+
+            # Claim extraction failure is a distinct rule failure — not an accuracy pass.
+            if claim_extraction_error is not None:
+                validator_verdicts.append(DimensionVerdict(
+                    dimension="claim_extraction",
+                    verdict=ValidationVerdict.FAIL,
+                    target="claim_extraction",
+                    signals_summary={
+                        "conv_id": conv_id,
+                        "attempts": claim_extraction_error.attempts,
+                        "raw_excerpt": claim_extraction_error.raw_excerpt[:200],
+                    },
+                ))
+
             last_validator_verdicts = validator_verdicts
 
             # Soft-judge on FAIL verdicts — non-gating, diagnostic only.

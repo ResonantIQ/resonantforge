@@ -2467,29 +2467,44 @@ def test_extract_claims_handles_fenced_response() -> None:
 
 def test_extract_claims_logs_on_parse_failure(caplog: pytest.LogCaptureFixture) -> None:
     """
-    extract_claims_llm must return [] AND emit a WARNING log when the model returns
-    unparseable garbage (not a fence issue — just bad JSON).
+    extract_claims_llm must raise ClaimExtractionError AND emit structured WARNING logs
+    when all 3 attempts return unparseable JSON.
 
-    Assertion 32 — use caplog to confirm the warning is emitted.
+    Assertion 32 — verifies the fail-loud contract and that the structured log includes
+    the telemetry fields needed to distinguish truncation from other failure modes:
+    response_length, stop_reason, excerpt_head, excerpt_tail.
     """
     import logging
+    import pytest as _pytest
     from unittest.mock import MagicMock
-    from confabra.validators.extractors.accuracy import extract_claims_llm
+    from confabra.validators.extractors.accuracy import extract_claims_llm, ClaimExtractionError
 
     mock_message = MagicMock()
     mock_message.content = [MagicMock(text="THIS IS NOT JSON AT ALL")]
+    mock_message.stop_reason = "end_turn"
 
     mock_client = MagicMock()
     mock_client.messages.create.return_value = mock_message
 
     with caplog.at_level(logging.WARNING, logger="confabra.validators.extractors.accuracy"):
-        claims = extract_claims_llm("some agent prose", anthropic_client=mock_client)
+        with _pytest.raises(ClaimExtractionError):
+            extract_claims_llm("some agent prose", anthropic_client=mock_client, max_attempts=3)
 
-    assert claims == [], (
-        f"Assertion 32 — expected [] on parse failure, got {claims}"
+    parse_fail_records = [r for r in caplog.records if "JSON parse failed" in r.message]
+    assert len(parse_fail_records) == 3, (
+        f"Assertion 32 — expected 3 'JSON parse failed' warnings (one per attempt), "
+        f"got {len(parse_fail_records)}"
     )
-    assert any("JSON parse failed" in record.message for record in caplog.records), (
-        "Assertion 32 — expected a 'JSON parse failed' warning to be logged"
+    rec = parse_fail_records[0]
+    assert hasattr(rec, "response_length"), "Assertion 32 — log must include response_length"
+    assert hasattr(rec, "stop_reason"), "Assertion 32 — log must include stop_reason"
+    assert hasattr(rec, "excerpt_head"), "Assertion 32 — log must include excerpt_head"
+    assert hasattr(rec, "excerpt_tail"), "Assertion 32 — log must include excerpt_tail"
+    assert rec.stop_reason == "end_turn", (
+        f"Assertion 32 — stop_reason should be 'end_turn', got {rec.stop_reason!r}"
+    )
+    assert rec.response_length == len("THIS IS NOT JSON AT ALL"), (
+        f"Assertion 32 — response_length should be full response length"
     )
 
 

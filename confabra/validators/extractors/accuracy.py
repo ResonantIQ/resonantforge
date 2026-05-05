@@ -55,19 +55,59 @@ def _strip_markdown_fence(content: str) -> str:
     return content
 
 
-def extract_claims_llm(agent_prose: str, anthropic_client: Anthropic | None = None) -> list[Claim]:
+class ClaimExtractionError(Exception):
+    """
+    Raised when extract_claims_llm exhausts all retry attempts without producing valid JSON.
+
+    Surfaced as a distinct 'claim_extraction' validator rule failure so the pipeline never
+    silently treats a parse failure as a trivial accuracy pass.
+    """
+
+    def __init__(self, raw_excerpt: str, attempts: int) -> None:
+        self.raw_excerpt = raw_excerpt
+        self.attempts = attempts
+        super().__init__(
+            f"claim extraction failed after {attempts} attempt(s); "
+            f"raw response excerpt: {raw_excerpt[:200]!r}"
+        )
+
+
+# Appended on retry attempts to steer the LLM back to pure JSON output.
+_STRICT_JSON_SUFFIX = (
+    "\n\nIMPORTANT: Respond with ONLY valid JSON. "
+    "No prose, no markdown fences, no explanation."
+)
+
+
+def extract_claims_llm(
+    agent_prose: str,
+    anthropic_client: Anthropic | None = None,
+    max_attempts: int = 3,
+) -> list[Claim]:
     """
     Step 1: Extract claims from agent prose using LLM (temperature=0, structured JSON).
 
     This is the only LLM call in the accuracy extractor. All downstream steps are
     deterministic. If anthropic_client is None (test/dry-run mode), returns empty list.
 
+    On JSON parse failure, retries up to ``max_attempts - 1`` times with a stricter
+    prompt suffix. If all attempts fail, raises ClaimExtractionError — never silently
+    returns [] on a parse failure, because that would make the accuracy validator
+    trivially pass against an empty claim set.
+
+    API-level errors (auth, network, rate limit) still return [] so the pipeline is
+    never gated on infrastructure problems.
+
     Args:
         agent_prose: agent turns only (customer turns must be excluded by the caller).
         anthropic_client: live Anthropic client, or None for test mode.
+        max_attempts: total LLM call attempts before raising (default 3).
 
     Returns:
         List of Claim objects parsed from the LLM JSON response.
+
+    Raises:
+        ClaimExtractionError: if all attempts produce unparseable JSON.
     """
     if not agent_prose.strip():
         return []
@@ -76,79 +116,91 @@ def extract_claims_llm(agent_prose: str, anthropic_client: Anthropic | None = No
         # Test/dry-run mode — return empty claims without hitting the API.
         return []
 
-    try:
-        response = anthropic_client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            temperature=0,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"{CLAIM_EXTRACTION_PROMPT}\n\nAgent prose:\n{agent_prose}",
-                }
-            ],
-        )
+    last_raw = ""
+    last_stop_reason: str | None = None
+    for attempt in range(max_attempts):
+        prompt = CLAIM_EXTRACTION_PROMPT
+        if attempt > 0:
+            prompt += _STRICT_JSON_SUFFIX
 
-        content = response.content[0].text.strip()
-        content = _strip_markdown_fence(content)
+        try:
+            response = anthropic_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1024,
+                temperature=0,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"{prompt}\n\nAgent prose:\n{agent_prose}",
+                    }
+                ],
+            )
+        except anthropic.APIError as e:
+            # Network failures, auth errors, rate limits — never gate the pipeline on these.
+            logger.warning(
+                "extract_claims_llm: Anthropic API error — returning empty claims",
+                extra={"error": str(e)},
+            )
+            return []
 
-        # Parse JSON output — LLM is instructed to return raw JSON only.
-        raw_claims = json.loads(content)
+        last_raw = response.content[0].text.strip()
+        last_stop_reason = response.stop_reason
+        content = _strip_markdown_fence(last_raw)
 
-        claims = []
-        for raw in raw_claims:
-            # Use `or default` (not `get(key, default)`) so that JSON null values
-            # — which dict.get returns as None even when a default is provided —
-            # are replaced with the intended fallback string.
-            claim_text = raw.get("claim_text") or ""
-            claim_type = raw.get("claim_type") or "factual"
-            subject = raw.get("subject") or ""
-            predicate = raw.get("predicate") or ""
-            obj = raw.get("object") or ""
+        try:
+            raw_claims = json.loads(content)
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning(
+                "extract_claims_llm: JSON parse failed",
+                extra={
+                    "attempt": attempt + 1,
+                    "max_attempts": max_attempts,
+                    "exc_type": type(exc).__name__,
+                    "response_length": len(last_raw),
+                    "stop_reason": last_stop_reason,
+                    "excerpt_head": last_raw[:200],
+                    "excerpt_tail": last_raw[-200:],
+                },
+            )
+            continue  # retry with stricter prompt
 
-            # Validate claim_span is a two-element list/tuple.
-            span = raw.get("claim_span") or [0, len(claim_text)]
-            if len(span) != 2:
-                span = [0, len(claim_text)]
+        try:
+            claims = []
+            for raw in raw_claims:
+                # Use `or default` (not `get(key, default)`) so that JSON null values
+                # — which dict.get returns as None even when a default is provided —
+                # are replaced with the intended fallback string.
+                claim_text = raw.get("claim_text") or ""
+                claim_type = raw.get("claim_type") or "factual"
+                subject = raw.get("subject") or ""
+                predicate = raw.get("predicate") or ""
+                obj = raw.get("object") or ""
 
-            claims.append(Claim(
-                claim_text=claim_text,
-                claim_span=(span[0], span[1]),
-                claim_type=claim_type,
-                normalized_subject=_normalize_text(subject, {}),
-                normalized_predicate=_normalize_text(predicate, {}),
-                normalized_object=_normalize_text(obj, {}),
-            ))
+                # Validate claim_span is a two-element list/tuple.
+                span = raw.get("claim_span") or [0, len(claim_text)]
+                if len(span) != 2:
+                    span = [0, len(claim_text)]
+
+                claims.append(Claim(
+                    claim_text=claim_text,
+                    claim_span=(span[0], span[1]),
+                    claim_type=claim_type,
+                    normalized_subject=_normalize_text(subject, {}),
+                    normalized_predicate=_normalize_text(predicate, {}),
+                    normalized_object=_normalize_text(obj, {}),
+                ))
+        except ValidationError as e:
+            # Pydantic rejected a field value (e.g. unknown claim_type literal) — treat as
+            # schema mismatch, not a parse failure, so we don't retry on something unfixable.
+            logger.warning(
+                "extract_claims_llm: Claim schema validation failed — returning empty claims",
+                extra={"error": str(e)},
+            )
+            return []
 
         return claims
 
-    except json.JSONDecodeError as e:
-        # content is always bound before json.loads() so the reference is safe here.
-        logger.warning(
-            "extract_claims_llm: JSON parse failed — returning empty claims",
-            extra={"error": str(e), "raw_response_preview": content[:300]},
-        )
-        return []
-    except (KeyError, IndexError) as e:
-        logger.warning(
-            "extract_claims_llm: schema mismatch in model response — returning empty claims",
-            extra={"error": str(e)},
-        )
-        return []
-    except ValidationError as e:
-        # Pydantic rejected a field value the model returned (e.g. unknown claim_type literal).
-        logger.warning(
-            "extract_claims_llm: Claim schema validation failed — returning empty claims",
-            extra={"error": str(e)},
-        )
-        return []
-    except anthropic.APIError as e:
-        # Network failures, auth errors, rate limits — never gate the pipeline on these.
-        logger.warning(
-            "extract_claims_llm: Anthropic API error — returning empty claims",
-            extra={"error": str(e)},
-        )
-        return []
+    raise ClaimExtractionError(raw_excerpt=last_raw, attempts=max_attempts)
 
 
 def _normalize_text(text: str, synonym_map: dict[str, str]) -> str:
