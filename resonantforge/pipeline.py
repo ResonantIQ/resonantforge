@@ -1147,6 +1147,7 @@ def _run_pipeline_inner(
         _p.parent.mkdir(parents=True, exist_ok=True)
         _p.touch()
 
+
     # Tracks how many ledger records have been flushed so far (ledger grows
     # asynchronously inside _generate_prose_for_chunk on FAIL verdicts).
     _ledger_flushed = 0

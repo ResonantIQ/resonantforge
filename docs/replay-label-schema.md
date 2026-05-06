@@ -90,7 +90,9 @@ Aggregate reports break agreement rates down by confidence bucket. Low-confidenc
 
 ### `tags`
 
-Zero or more tags from the vocabulary below. Tags enable filtering in aggregate reports (`rforge replay run` breaks out agreement by tag).
+Zero or more tags from the **closed vocabulary** below. Tags enable filtering in aggregate reports (`rforge replay run` breaks out agreement by tag).
+
+**Tags are an enforced enum.** The harness raises `LabelSchemaError` on any value not in this list — this prevents typos (e.g. `"borderlne"`) from silently polluting aggregate tag breakdowns with phantom categories.
 
 | Tag | When to use |
 |---|---|
@@ -106,6 +108,8 @@ Zero or more tags from the vocabulary below. Tags enable filtering in aggregate 
 | `"organic"` | Conversation was organically generated (no `quality_plan`). |
 
 Multiple tags may be applied. Tags are additive — a conversation can be both `"edge_case"` and `"high_confidence_fail"`.
+
+To add a new tag to the vocabulary: update the harness validator and this document in the same PR. Do not use free-form strings — they will be rejected at load time.
 
 ### `rationale`
 Required string. One to three sentences explaining why you assigned this label. Focus on what is observable in `agent_prose` and `customer_prose` — not on what the validator does. The rationale serves future re-labelers who need to understand your reasoning.
@@ -204,3 +208,18 @@ The harness raises `LabelSchemaError` (with a clear message) on load if:
 - `label_version` is not a positive integer
 - `rationale` is an empty string or missing
 - `revised_from` is non-null but `revision_notes` is null (revision audit trail is incomplete)
+- `tags` contains any value not in the closed vocabulary above
+
+---
+
+## Schema Migration Policy
+
+When the label schema advances to version 2, the harness will hard-error (`LabelSchemaError`) on any file where `schema_version != 2`. There are no implicit migrations — a version mismatch always fails loudly.
+
+**Intended story for v1 → v2:**
+- If the new version only adds optional fields: add the fields with defaults to every `labels.json`. Existing labels remain valid after the field is added.
+- If the new version adds a required field to `expected_failures` (e.g. a new validator rule): every existing `labels.json` must gain that key. The safe default is `false`. Re-evaluate per conversation to confirm the default is correct.
+- If the new version removes or renames a field: the migration guide in `replay_corpus/README.md` will document the path. The harness will not silently ignore unknown keys.
+- Labels never need to be re-authored from scratch across a schema version bump — `rationale` and `expected_outcome` are conversation-level observations that survive structural changes to the schema.
+
+**To migrate:** run `rforge replay migrate-labels --corpus PATH --to-version 2` (this command is a v2 addition; the implementation is the schema author's responsibility at that time).

@@ -99,7 +99,13 @@ An envelope is a self-contained snapshot of every input a validator needs to rep
           "normalized_object": "within 5 business days",
           "alignment": null
         }
-      ]
+      ],
+      "extraction_meta": {
+        "model": "claude-haiku-4-5-20251001",
+        "prompt_version": "sha256:<64-char hex of CLAIM_EXTRACTION_PROMPT at extraction time>",
+        "extracted_at": "2026-05-05T22:00:00Z",
+        "claims_hash": "sha256:<64-char hex of sorted canonical JSON of extracted_claims>"
+      }
     }
   },
   "metadata": {
@@ -145,6 +151,18 @@ Lexicon sources by extractor:
 
 The `alignment` field on each Claim is `null` at extraction time; it is populated in-place during Steps 3–4 of KB alignment. The harness replays from the null state.
 
+### `validator_inputs.accuracy.extraction_meta`
+**Required.** Provenance record for the `extract_claims_llm` call that produced `extracted_claims`. Hard-errors at load time if absent (`EnvelopeSchemaError`).
+
+| Field | Type | Description |
+|---|---|---|
+| `model` | string | Anthropic model ID used for extraction (e.g. `"claude-haiku-4-5-20251001"`) |
+| `prompt_version` | string | `"sha256:<hex>"` of `CLAIM_EXTRACTION_PROMPT` at extraction time — detects prompt drift |
+| `extracted_at` | string | ISO-8601 UTC timestamp of the `extract-envelopes` run |
+| `claims_hash` | string | `"sha256:<hex>"` of the sorted canonical JSON of `extracted_claims` — detects tampering or extraction non-determinism |
+
+**Why this matters:** When `compute_run_fingerprint()` shows a fingerprint change and you want to know *why*, the `prompt_version` tells you if the extraction prompt changed and `claims_hash` tells you if the claims themselves differ from a prior extraction of the same conversation.
+
 ### `metadata`
 - `source_corpus` — relative path to the smoke output directory from which this envelope was extracted. Used for provenance tracing.
 - `pipeline_version` and `generator_version` — from `manifest.generator_version` at extraction time.
@@ -162,6 +180,38 @@ The `alignment` field on each Claim is `null` at extraction time; it is populate
 | Soft-judge output | Diagnostic only, non-gating. Excluded from replay scope. |
 | All 4 signal objects | These are extractor *outputs*, not inputs. The replay engine recomputes them from the frozen inputs above. |
 | `ConversationRecord` fields (agent_id, surface_channel, etc.) | Not consumed by any validator. Referenced from the source JSONL if needed for labeling context. |
+
+---
+
+## Re-extraction and Label Survival
+
+When `rforge replay extract-envelopes` is re-run (because lexicons changed, a new validator was added, or `extracted_claims` needs refreshing), the regenerated envelope replaces the old one on disk. The companion `labels.json` is **not** touched.
+
+**The contract:** labels describe the conversation, not the validator configuration. They survive re-extraction as long as the conversation prose is unchanged.
+
+Concretely:
+
+| What changed | Labels still valid? |
+|---|---|
+| Profile lexicons updated (empathy, resolution, brand_voice lists) | **Yes.** Labels describe what the agent said, not which lexicon matched it. The new lexicons may change the validator's verdict — that's the point of re-extracting — but the label's `expected_outcome` and `rationale` remain correct. |
+| New validator rule added to the harness | **Conditionally.** The label's `expected_outcome` is still valid. `expected_failures` needs the new key added (default `false`). The harness raises `LabelSchemaError` if a required key is missing — use that as a prompt to review per conversation. |
+| `extracted_claims` changed (LLM extractor updated, accuracy prompt revised) | **Conditionally.** Labels that target `claim_extraction` (i.e. `expected_failures.claim_extraction: true`) may need re-evaluation. Labels that target other dimensions are unaffected. |
+| Conversation prose re-generated (smoke re-run with same conv_id) | **No.** The conversation is a different document now. Treat as unlabeled and author new labels. |
+| `conv_id` changed | **No.** The harness validates `conv_id` match between envelope and labels at load time and raises immediately. |
+
+**When in doubt:** if re-extraction changes a validator's verdict on a conv you've labeled, treat the disagreement as a signal — not an error. Check whether the new verdict matches your `expected_outcome`. If it does, the label is still correct and the validator improved. If it doesn't, the label may need `revision_notes` explaining which change triggered the re-evaluation.
+
+---
+
+## Schema Migration Policy
+
+When the envelope schema advances to version 2, the harness will hard-error (`EnvelopeSchemaError`) on any file where `schema_version != 2`. There are no implicit migrations.
+
+**Intended story for v1 → v2:**
+- **If new fields are additive** (e.g. a new optional section in `validator_inputs`): re-run `rforge replay extract-envelopes` to regenerate envelopes. This makes one LLM call per conversation (to re-extract claims). Existing labels survive unchanged.
+- **If the schema change is structural** (e.g. `lexicons` reorganised, `quality_plan` fields renamed): the migration guide in `replay_corpus/README.md` will document the exact path and what must be re-extracted vs. what can be migrated in place.
+- Re-extraction after a schema bump is the expected path; the one-time LLM cost is cheap relative to the value of a correctly-structured corpus.
+- Labels are not re-authored across envelope schema bumps unless the label schema also bumps.
 
 ---
 

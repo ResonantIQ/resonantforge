@@ -1,11 +1,13 @@
 """
 ResonantForge CLI entry point.
 
-Provides four subcommands:
-  generate  — run the corpus generation pipeline
-  validate  — verify a generated corpus directory against its manifest
-  inspect   — sample records from each corpus artifact
-  stats     — print manifest statistics in a Rich panel
+Provides subcommands:
+  generate         — run the corpus generation pipeline
+  validate         — verify a generated corpus directory against its manifest
+  inspect          — sample records from each corpus artifact
+  stats            — print manifest statistics in a Rich panel
+  replay extract-envelopes — freeze validator inputs into replay envelopes
+  replay run       — run validators against frozen envelopes at zero LLM cost
 """
 
 from __future__ import annotations
@@ -587,3 +589,212 @@ def inspect_skip(conversation_id: str, corpus_dir: Path) -> None:
         console.print("  [dim](no prose captured — pre-prompt or API-error skip)[/dim]")
     else:
         console.print(final_prose)
+
+
+# ---------------------------------------------------------------------------
+# replay — subcommand group
+# ---------------------------------------------------------------------------
+
+
+@cli.group("replay")
+def replay_group() -> None:
+    """Frozen-replay harness: extract envelopes and run validators at zero LLM cost."""
+
+
+@replay_group.command("extract-envelopes")
+@click.option(
+    "--corpus",
+    "corpus_dir",
+    required=True,
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Corpus profile directory (e.g. corpus/saas)",
+)
+@click.option(
+    "--profile",
+    required=True,
+    help='Profile name matching the corpus (e.g. "saas")',
+)
+@click.option(
+    "--out",
+    "replay_corpus_dir",
+    required=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Output directory for replay corpus (e.g. replay_corpus/saas)",
+)
+@click.option(
+    "--api-key",
+    default=None,
+    envvar="ANTHROPIC_API_KEY",
+    help="Anthropic API key for extract_claims_llm (required for LLM extraction)",
+)
+@click.option(
+    "--conv-id",
+    "conv_ids",
+    multiple=True,
+    help="Limit extraction to specific conv_id(s). Repeatable. Default: all.",
+)
+def extract_envelopes(
+    corpus_dir: Path,
+    profile: str,
+    replay_corpus_dir: Path,
+    api_key: Optional[str],
+    conv_ids: tuple[str, ...],
+) -> None:
+    """
+    Extract frozen replay envelopes from an existing smoke corpus.
+
+    Reads conversations.jsonl + planted_quality.jsonl + KB chunks from CORPUS,
+    calls extract_claims_llm once per conversation (the only paid LLM step),
+    and writes:
+      {OUT}/{conv_id}/envelope.json  — frozen validator inputs
+      {OUT}/{conv_id}/labels.json    — empty label template (skipped if exists)
+
+    Re-running is safe: envelopes are overwritten; existing labels.json are
+    never touched.
+    """
+    if not api_key:
+        console.print("[red]Error:[/red] ANTHROPIC_API_KEY is required for extract-envelopes.")
+        console.print("Set the env var or pass --api-key.")
+        raise SystemExit(1)
+
+    try:
+        import anthropic as _anthropic
+        client = _anthropic.Anthropic(api_key=api_key)
+    except ImportError:
+        console.print("[red]Error:[/red] anthropic package not installed.")
+        raise SystemExit(1)
+
+    from resonantforge.replay.extractor import extract_envelopes as _extract
+
+    replay_corpus_dir.mkdir(parents=True, exist_ok=True)
+
+    def _progress(conv_id: str, idx: int, total: int) -> None:
+        console.print(f"  [{idx}/{total}] {conv_id}")
+
+    conv_filter = list(conv_ids) if conv_ids else None
+
+    try:
+        extracted = _extract(
+            profile_dir=corpus_dir,
+            replay_corpus_dir=replay_corpus_dir,
+            profile_name=profile,
+            anthropic_client=client,
+            conv_filter=conv_filter,
+            progress_callback=_progress,
+        )
+    except Exception as exc:
+        console.print(f"[red]Extraction failed:[/red] {exc}")
+        raise SystemExit(1)
+
+    console.print(f"\n[green]Done.[/green] {len(extracted)} envelope(s) written to {replay_corpus_dir}")
+
+
+@replay_group.command("run")
+@click.option(
+    "--corpus",
+    "replay_corpus_dir",
+    required=True,
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Replay corpus directory (e.g. replay_corpus/saas)",
+)
+@click.option(
+    "--conv-id",
+    "conv_ids",
+    multiple=True,
+    help="Limit replay to specific conv_id(s). Repeatable. Default: all.",
+)
+@click.option(
+    "--fingerprint",
+    "show_fingerprint",
+    is_flag=True,
+    default=False,
+    help="Print the corpus-level determinism fingerprint at the end.",
+)
+def replay_run(
+    replay_corpus_dir: Path,
+    conv_ids: tuple[str, ...],
+    show_fingerprint: bool,
+) -> None:
+    """
+    Run validators against frozen envelopes at zero LLM cost.
+
+    Reads {CORPUS}/{conv_id}/envelope.json and {CORPUS}/{conv_id}/labels.json
+    for each conversation, runs all 4 dimension validators with the frozen
+    inputs, and prints per-conversation agreement results live.
+
+    Conversations with labels.json that are still FILL_IN placeholders
+    (expected_outcome="uncertain") are included in the run but excluded from
+    agreement rate calculations.
+    """
+    import os
+    os.environ["RFORGE_REPLAY_MODE"] = "1"
+
+    from resonantforge.replay import (
+        EnvelopeSchemaError,
+        LabelSchemaError,
+        compute_corpus_fingerprint,
+        format_conv_line,
+        format_summary,
+        load_envelope,
+        load_labels,
+        replay_one,
+    )
+
+    # Discover conv_ids from directory structure
+    if conv_ids:
+        target_ids = list(conv_ids)
+    else:
+        target_ids = sorted(
+            d.name for d in replay_corpus_dir.iterdir()
+            if d.is_dir() and (d / "envelope.json").exists()
+        )
+
+    if not target_ids:
+        console.print("[yellow]No envelopes found in corpus.[/yellow]")
+        raise SystemExit(0)
+
+    results = []
+    errors: list[str] = []
+
+    for conv_id in target_ids:
+        conv_dir = replay_corpus_dir / conv_id
+        env_path = conv_dir / "envelope.json"
+        lbl_path = conv_dir / "labels.json"
+
+        try:
+            envelope = load_envelope(env_path)
+        except EnvelopeSchemaError as exc:
+            msg = f"[red]ENVELOPE ERROR[/red] {conv_id}: {exc}"
+            console.print(msg)
+            errors.append(str(exc))
+            continue
+
+        try:
+            labels = load_labels(lbl_path, conv_id=conv_id)
+        except LabelSchemaError as exc:
+            msg = f"[red]LABEL ERROR[/red] {conv_id}: {exc}"
+            console.print(msg)
+            errors.append(str(exc))
+            continue
+
+        try:
+            result = replay_one(envelope, labels)
+        except Exception as exc:
+            msg = f"[red]REPLAY ERROR[/red] {conv_id}: {exc}"
+            console.print(msg)
+            errors.append(str(exc))
+            continue
+
+        console.print(format_conv_line(result))
+        results.append(result)
+
+    console.print()
+    console.print(format_summary(results))
+
+    if show_fingerprint:
+        fp = compute_corpus_fingerprint(results)
+        console.print(f"\nCorpus fingerprint: {fp}")
+
+    if errors:
+        console.print(f"\n[red]{len(errors)} error(s) encountered.[/red]")
+        raise SystemExit(1)
