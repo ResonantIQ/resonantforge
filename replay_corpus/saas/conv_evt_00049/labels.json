@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00049",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate technical guidance (Bearer prefix requirement), demonstrated clear empathy and reassurance throughout, and delivered complete resolution with concrete next steps and account-level follow-up. The extracted claims are all substantive and appropriately grounded in the company's API behavior. Tone is professional yet warm, and the customer achieved their goal with confirmation of successful 200 response.",
+  "revised_from": null,
+  "revision_notes": null
+}

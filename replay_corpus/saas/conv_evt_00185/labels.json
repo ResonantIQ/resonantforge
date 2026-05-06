@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00185",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong problem-solving by offering multiple solutions (optimization, plan upgrade, trial period), clearly communicates pricing and discount terms, and provides concrete next steps with a 7-day trial that directly addresses the customer's request to test before committing. Tone is professional yet conversational, empathy is evident in acknowledging the customer's use case, and all extracted claims appear consistent with typical SaaS offerings.",
+  "revised_from": null,
+  "revision_notes": null
+}

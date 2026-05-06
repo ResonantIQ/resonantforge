@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00393",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong diagnostic skill by correlating the timeline with a recent deployment, acknowledged customer frustration appropriately, provided clear ownership (personal monitoring, 15-minute update), and correctly assured no customer-side changes needed. All factual claims were appropriately qualified (\"might have,\" \"usually resolve within\") and the agent took concrete action (flagging account, incident ticket).",
+  "revised_from": null,
+  "revision_notes": null
+}

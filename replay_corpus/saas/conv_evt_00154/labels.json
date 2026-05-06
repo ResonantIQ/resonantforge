@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00154",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, actionable troubleshooting steps for a 401 authentication error, correctly identified permission issues as a likely root cause, and guided the customer toward best practices (OAuth, dedicated integration user). The tone is professional yet approachable, empathy is shown through validation of the customer's approach, and clear next steps are provided. All extracted claims are technically sound and appropriately qualified.",
+  "revised_from": null,
+  "revision_notes": null
+}

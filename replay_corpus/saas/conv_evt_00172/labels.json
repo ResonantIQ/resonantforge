@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00172",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy, validates the customer's troubleshooting efforts, and provides clear ownership with specific timelines (24-hour follow-up, engineering escalation marked high-priority). All extracted factual claims are appropriately qualified (\"typically,\" \"depending on complexity\") and align with the agent's statements. Resolution pathway is explicit and actionable.",
+  "revised_from": null,
+  "revision_notes": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00174",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong empathy, acknowledged the customer's confusion, and systematically diagnosed the issue through clarifying questions. The agent provided accurate guidance (new visitors convert lower than returning users, social traffic converts differently than organic/email) with appropriate qualifications (\"pretty standard,\" \"often brings in\"), gave clear step-by-step instructions for segmentation, and achieved full resolution. The tone is warm and conversational without being unprofessional.",
+  "revised_from": null,
+  "revision_notes": null
+}

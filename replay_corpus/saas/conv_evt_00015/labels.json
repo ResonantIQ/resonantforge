@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00015",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate troubleshooting guidance, identified the likely root cause (API key truncation), gave clear step-by-step instructions for regeneration, and confirmed resolution. Tone is friendly and professional, empathy is demonstrated through validation of the customer's success, and all six extracted claims align with the agent's prose and appear technically sound.",
+  "revised_from": null,
+  "revision_notes": null
+}

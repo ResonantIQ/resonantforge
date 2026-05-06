@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00319",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong problem-solving by analyzing usage data, offering multiple paths forward (upgrade vs. optimization), and providing concrete incentives to reduce friction. All seven extracted factual claims are clearly stated and contextually appropriate. Tone is professional yet warm, empathy is evident through acknowledgment of common scaling challenges, and resolution is definitive with specific timelines and follow-up commitment.",
+  "revised_from": null,
+  "revision_notes": null
+}

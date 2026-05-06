@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00292",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate troubleshooting guidance (internal addresses inaccessible, 403 as permission issue), appropriately diagnosed the root cause, and guided the customer to a working solution. The tone is warm and helpful without being unprofessional, empathy is demonstrated throughout, and clear next steps are provided. All eight extracted claims align well with standard webhook implementation practices.",
+  "revised_from": null,
+  "revision_notes": null
+}

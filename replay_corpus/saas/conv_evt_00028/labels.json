@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00028",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, well-structured guidance that directly addressed the customer's questions with specific UI paths and plan-level feature details. The conversation demonstrates strong empathy by acknowledging the customer's self-discovery, clear resolution through step-by-step navigation and feature confirmation, and appropriate professional tone. All nine extracted claims are substantive and properly supported by the agent's responses.",
+  "revised_from": null,
+  "revision_notes": null
+}

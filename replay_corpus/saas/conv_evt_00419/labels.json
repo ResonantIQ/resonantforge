@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00419",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided step-by-step troubleshooting instructions that resolved the customer's issue, acknowledged the plan-level feature availability, and offered follow-up support. The extracted claims accurately capture the procedural and policy statements made. Customer confirmed successful resolution.",
+  "revised_from": null,
+  "revision_notes": null
+}

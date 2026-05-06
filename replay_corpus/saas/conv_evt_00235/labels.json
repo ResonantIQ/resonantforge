@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00235",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by validating the customer's concern and suggesting optimization before upselling. All extracted claims are substantive and properly identified. The agent commits to concrete next steps (sending documentation, follow-up in a week) and maintains a helpful, professional tone throughout.",
+  "revised_from": null,
+  "revision_notes": null
+}

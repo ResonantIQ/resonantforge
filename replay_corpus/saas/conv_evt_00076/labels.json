@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00076",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate guidance aligned with customer's Professional plan, offered clear step-by-step next steps (emailed instructions), and demonstrated genuine empathy by addressing both the customer's initial confusion and downstream concerns about email disruption. The tone is conversational and supportive without being robotic, and all seven extracted factual claims are industry-standard statements about DNS propagation and domain configuration.",
+  "revised_from": null,
+  "revision_notes": null
+}

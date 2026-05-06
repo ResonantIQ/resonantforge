@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00290",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong problem-solving by diagnosing the root cause (individual API calls vs batching), offering a low-cost solution before upselling, and providing concrete next steps with a resource. The response shows genuine empathy, clear ownership, appropriate tone, and all factual claims are reasonable and well-supported by context.",
+  "revised_from": null,
+  "revision_notes": null
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00165",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "Agent's messaging contains a critical accuracy failure: claims 1 and 2 are vague and unsubstantiated ('period of time,' 'plenty of time'), while claims 4 and 5 directly contradict\u2014claim 4 says data 'transitions out of active retention' but claim 5 states it is 'permanently deleted,' creating confusion about the actual policy. The agent failed to provide consistent, definitive information on a high-stakes policy question.",
+  "revised_from": null,
+  "revision_notes": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00121",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong problem-solving by asking clarifying questions before jumping to a limit increase, identifies the root cause (individual vs. batched requests), and offers a concrete optimization solution with promised documentation. Tone is friendly and professional, empathy is evident in acknowledging the customer's growth, and resolution is clear with next steps and offer of continued support.",
+  "revised_from": null,
+  "revision_notes": null
+}

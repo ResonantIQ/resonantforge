@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00264",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by acknowledging confusion, correcting their initial misunderstanding, and taking ownership by escalating to billing with a specific date and 24-hour timeline. The conversation resolves with the customer satisfied ('No, that works. Thanks for getting that sorted out'), and all factual claims about pricing, proration policy, and next steps are appropriately qualified or actionable.",
+  "revised_from": null,
+  "revision_notes": null
+}

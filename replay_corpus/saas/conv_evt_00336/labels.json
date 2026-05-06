@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00336",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy, validates customer frustration, provides clear step-by-step troubleshooting instructions, and achieves resolution. The tone is professional yet personable, and all factual claims are appropriately qualified (e.g., 'may need to be adjusted,' 'often resolves'). Customer confirms the fix worked and expresses satisfaction.",
+  "revised_from": null,
+  "revision_notes": null
+}

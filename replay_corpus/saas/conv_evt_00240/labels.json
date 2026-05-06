@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00240",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong troubleshooting by guiding the customer to identify the root cause (expired API key via 401 errors), provided clear actionable next steps (regenerate key in Settings), and offered helpful security best practices. The tone is friendly and professional, empathy is shown through acknowledgment of the issue, and all factual claims are accurate and appropriately qualified.",
+  "revised_from": null,
+  "revision_notes": null
+}

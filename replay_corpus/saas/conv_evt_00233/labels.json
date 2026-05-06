@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00233",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent systematically diagnosed the customer's issue, provided accurate pricing and feature information, guided them through the upgrade process with specific navigation steps, and addressed their data retention concern comprehensively. The tone is helpful and professional throughout, with clear empathy for the customer's initial disappointment about the free plan limitation.",
+  "revised_from": null,
+  "revision_notes": null
+}

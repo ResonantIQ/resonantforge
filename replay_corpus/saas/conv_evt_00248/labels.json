@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00248",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent correctly diagnosed the performance issue (concurrent user limits), provided specific plan details with pricing, offered a retention discount with clear terms, and confirmed next steps. The response demonstrates strong product knowledge, empathy for budget constraints, and clear resolution ownership with appropriate follow-up commitment.",
+  "revised_from": null,
+  "revision_notes": null
+}

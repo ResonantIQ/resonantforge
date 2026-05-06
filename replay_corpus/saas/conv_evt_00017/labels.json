@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00017",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, well-qualified guidance on routing rules with appropriate caveats (e.g., 'typically based on urgency' rather than absolutes). Customer achieved clear resolution with step-by-step instructions and specific product navigation. Tone is helpful and professional without being robotic, and all nine factual claims were properly extracted from substantive agent prose.",
+  "revised_from": null,
+  "revision_notes": null
+}

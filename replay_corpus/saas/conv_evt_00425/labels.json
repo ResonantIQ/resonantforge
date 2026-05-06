@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00425",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate navigation guidance, acknowledged the customer's UI feedback constructively, offered an alternative workflow shortcut, and maintained a helpful, conversational tone throughout. The customer self-resolved during the conversation, but the agent's proactive suggestions and empathetic acknowledgment of the UI friction made the interaction valuable. All four extracted claims are verifiable product features.",
+  "revised_from": null,
+  "revision_notes": null
+}

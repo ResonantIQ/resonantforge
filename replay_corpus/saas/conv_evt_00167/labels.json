@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00167",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "Agent made multiple contradictory and unsupported claims about cash refunds and policy flexibility, then partially retracted them when pressed. The agent stated cash refunds were standard policy, then later admitted to misspeaking and acknowledged only that an SLA credit was entitled\u2014creating a significant accuracy failure that undermines trust. While the agent ultimately corrected course and committed to verifying details, the initial misrepresentations were material and required customer challenge to surface.",
+  "revised_from": null,
+  "revision_notes": null
+}

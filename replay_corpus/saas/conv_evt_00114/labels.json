@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00114",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "Agent made a clear accuracy error by stating exports are 'ready instantly for all accounts' without disclosing the 24-hour threshold for large accounts (100k+ records). This material caveat should have been mentioned upfront, as the customer correctly points out. The agent recovered somewhat by explaining the threshold later, but the initial overgeneralization directly caused customer frustration and misalignment with expectations.",
+  "revised_from": null,
+  "revision_notes": null
+}

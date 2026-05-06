@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00417",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "uncertain",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "medium",
+  "tags": [
+    "organic",
+    "borderline",
+    "overgeneralization"
+  ],
+  "rationale": "The agent provided helpful, empathetic guidance with appropriate tone and clear resolution. However, claim #5 ('you can add up to 5 team members at no extra cost') is presented as fact without qualification, despite being account/plan-specific information that should be verified against the customer's actual plan tier. The extraction is complete and accurate, but the accuracy of the underlying claim cannot be validated without access to the customer's subscription details.",
+  "revised_from": null,
+  "revision_notes": null
+}

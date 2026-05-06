@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00104",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": true,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail"
+  ],
+  "rationale": "Agent fails to provide clear ownership, timeline, or actionable next steps despite a production outage. The customer asks directly 'how long would that take' and 'should I expect to hear back,' but receives only vague assurances ('our team will look into,' 'when they get a chance,' 'will be in touch') without commitment, SLA, or specific follow-up mechanism. This leaves the customer in critical production impact with no concrete resolution path.",
+  "revised_from": null,
+  "revision_notes": null
+}

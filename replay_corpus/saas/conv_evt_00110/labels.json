@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00110",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate technical guidance (case-sensitivity, property name matching, API logs location), demonstrated genuine empathy by validating the customer's troubleshooting effort, and delivered clear resolution with specific next steps. The tone is warm and professional, and all four extracted claims appear factually sound and appropriately qualified.",
+  "revised_from": null,
+  "revision_notes": null
+}

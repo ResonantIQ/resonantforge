@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00375",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": true,
+    "resolution": false,
+    "brand_voice": true,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization",
+    "borderline"
+  ],
+  "rationale": "Agent's tone is robotic and transactional, lacking acknowledgment of the customer's production emergency and frustration. Critical accuracy issues include claiming 'rate limits increase immediately' while also stating 'takes effect within 15 minutes' (contradictory), and overgeneralizing that timeouts are caused by exceeding rate limits without investigating actual error codes or root cause\u2014the customer's 87% usage may not be the issue.",
+  "revised_from": null,
+  "revision_notes": null
+}

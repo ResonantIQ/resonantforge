@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00321",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by acknowledging the issue's impact on the team, provides clear ownership (marking as urgent, personally monitoring), and commits to specific follow-up actions (email notification). All four extracted claims are reasonable and appropriately qualified\u2014the 2-4 hour estimate is framed as 'usually' and the monitoring/email commitments reflect standard support practices. Brand voice is professional and reassuring throughout.",
+  "revised_from": null,
+  "revision_notes": null
+}

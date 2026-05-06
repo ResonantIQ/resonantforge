@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00305",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "Agent made a significant accuracy error by stating the standard onboarding timeline is 7-10 business days when the customer's setup wizard clearly stated 2-4 business days. Rather than investigating the discrepancy between documented and actual timelines, the agent dismissed the customer's observation and repositioned the longer timeline as standard policy without acknowledging the conflicting information the customer legitimately encountered. This represents both an accuracy failure and an overgeneralization of policy.",
+  "revised_from": null,
+  "revision_notes": null
+}

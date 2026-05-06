@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00287",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent diagnosed the root cause accurately (main API key vs. webhook credential confusion), provided clear step-by-step instructions with specific UI paths, demonstrated empathy by validating the customer's troubleshooting effort, and achieved full resolution. The tone is warm and professional without being stiff, and all six extracted claims are well-supported by the agent's guidance.",
+  "revised_from": null,
+  "revision_notes": null
+}

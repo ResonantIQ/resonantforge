@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00011",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent correctly diagnosed the issue (missing save step), provided clear actionable guidance, and set appropriate expectations (5-10 minutes with caveat to check tomorrow). The tone is warm and helpful without being overly casual. Both extracted claims are reasonable and well-supported by standard SaaS product behavior.",
+  "revised_from": null,
+  "revision_notes": null
+}

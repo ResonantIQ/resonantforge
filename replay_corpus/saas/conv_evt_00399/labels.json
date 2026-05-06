@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00399",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "Agent made a critical factual claim without verification: that 'conversation.started' is only available in Enterprise plans while the customer is on Professional. This assertion directly caused the resolution but cannot be verified against actual product documentation provided. The agent presented an unqualified policy restriction as fact, which is a material accuracy failure in a technical support context.",
+  "revised_from": null,
+  "revision_notes": null
+}

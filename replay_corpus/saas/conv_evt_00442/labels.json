@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00442",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong troubleshooting by identifying the root cause (declined payment) quickly, explains it clearly, and provides multiple resolution paths with customer choice. Empathy is evident through apologetic opening and proactive follow-up advice. All claims are appropriately extracted and supported by the narrative flow.",
+  "revised_from": null,
+  "revision_notes": null
+}

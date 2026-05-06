@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00071",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong troubleshooting skills by asking clarifying questions, identifying the root cause (custom properties not syncing in UI despite API data being present), and providing a clear, actionable next step (clear cache and refresh). The tone is professional yet conversational, empathy is shown through acknowledgment of the customer's setup work, and the resolution path is explicit with a follow-up option if needed.",
+  "revised_from": null,
+  "revision_notes": null
+}

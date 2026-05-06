@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00268",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, step-by-step guidance that directly resolved the customer's issue. The tone is warm and helpful without being robotic, empathy is demonstrated through patience as the customer self-discovered the feature, and all seven extracted claims appear well-supported by the dialogue. The customer confirmed satisfaction and took clear next steps.",
+  "revised_from": null,
+  "revision_notes": null
+}

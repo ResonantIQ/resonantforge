@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00373",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong troubleshooting methodology by systematically ruling out common causes (team size, project scope, errors/slowdowns) before diving into technical investigation. Empathy is present throughout\u2014agent validates the customer's concern as 'unusual' and commits to investigation. Resolution is clear: specific next steps (API log review, screen share at 2 PM tomorrow, team-side logging) with concrete deliverables (calendar invite, Zoom link). Tone is professional and reassuring without being robotic.",
+  "revised_from": null,
+  "revision_notes": null
+}

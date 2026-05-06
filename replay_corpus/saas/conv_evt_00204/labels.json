@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00204",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, well-sourced technical guidance that directly resolved the customer's webhook setup issue. Empathy is demonstrated through acknowledgment of frustration and clear explanations; resolution is strong with specific UI navigation paths and actionable next steps. Brand voice is warm and professional without being robotic. All eight extracted claims appear reasonable and properly grounded in the support dialogue.",
+  "revised_from": null,
+  "revision_notes": null
+}

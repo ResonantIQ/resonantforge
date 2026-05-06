@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00409",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent correctly verified the customer's eligibility within the 30-day refund window, clearly explained the refund process and timeline, and processed the request without unnecessary friction. All four extracted claims are accurate and properly supported by the company's stated policy, and the agent demonstrated appropriate empathy and professional tone throughout.",
+  "revised_from": null,
+  "revision_notes": null
+}

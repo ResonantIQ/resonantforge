@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00217",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong troubleshooting methodology by asking clarifying questions, providing a specific troubleshooting step (cache clearing), and validating the resolution when it worked. The conversation shows genuine empathy, appropriate tone, and the customer successfully resolved their issue. All three extracted claims are reasonable technical assertions supported by the customer's positive outcome.",
+  "revised_from": null,
+  "revision_notes": null
+}

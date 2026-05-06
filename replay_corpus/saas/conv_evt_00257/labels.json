@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00257",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates solid empathy by acknowledging the issue, provides actionable troubleshooting steps while appropriately committing to investigation, sets realistic expectations about timeline variance, and maintains a professional yet helpful tone throughout. All five extracted claims are accurately represented and properly qualified with appropriate hedging language.",
+  "revised_from": null,
+  "revision_notes": null
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00042",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "Agent makes unsupported claims about system limitations (no billing section in settings, manual verification requirement, 24-hour processing) that appear fabricated to justify collecting sensitive payment data via chat. Most critically, the agent requests the customer share their card number in an unencrypted conversation channel\u2014a severe security and compliance violation that contradicts the stated 'security protocols.' This is a clear failure on accuracy and represents genuine risk.",
+  "revised_from": null,
+  "revision_notes": null
+}

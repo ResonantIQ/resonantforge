@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00364",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent correctly diagnosed the root cause (expired auth token), provided clear step-by-step reauthorization instructions, and proactively explained the token expiration policy to prevent recurrence. Customer confirmed the fix worked and expressed satisfaction. All nine extracted claims are accurate and properly supported by the agent's prose.",
+  "revised_from": null,
+  "revision_notes": null
+}

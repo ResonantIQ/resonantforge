@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00163",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent successfully diagnosed the root cause (missing admin permissions), provided clear actionable next steps, and answered follow-up questions with specific product limits. The tone is professional yet approachable, empathy is demonstrated through understanding the customer's situation, and all six extracted claims appear reasonable and well-supported by the dialogue context.",
+  "revised_from": null,
+  "revision_notes": null
+}

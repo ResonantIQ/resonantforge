@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00096",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided clear, step-by-step guidance that directly resolved the customer's confusion about workflow automation features. The response demonstrates strong empathy, maintains a warm and professional tone, and delivers concrete next steps with specific plan limits. All seven extracted factual claims appear reasonable and consistent with typical SaaS feature architecture.",
+  "revised_from": null,
+  "revision_notes": null
+}

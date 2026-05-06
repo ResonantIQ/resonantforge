@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00303",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent diagnosed the issue accurately, provided clear step-by-step guidance with specific UI elements (Map Variables button), and achieved full resolution confirmed by the customer. Tone is warm and conversational while remaining professional, and empathy is demonstrated through normalizing the customer's assumption and celebrating the successful outcome.",
+  "revised_from": null,
+  "revision_notes": null
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00080",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": true,
+    "resolution": false,
+    "brand_voice": true,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "Agent's responses are fragmented, dismissive, and lack empathy for the customer's frustration. The claim that 12 team members and one month of data is 'within normal limits' appears unsupported given the repeated timeouts, and the suggestion to use an API contradicts the customer's explicit statement of not being technical enough. The tone is robotic and transactional, offering workarounds rather than genuine troubleshooting or escalation.",
+  "revised_from": null,
+  "revision_notes": null
+}

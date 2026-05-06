@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00276",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provides clear, step-by-step guidance to resolve the customer's feature request with specific UI paths and field type options. All factual claims are properly extracted and appear operationally sound. The agent demonstrates empathy by acknowledging the customer's specific needs, maintains a friendly and professional tone, and achieves full resolution with the customer explicitly confirming satisfaction.",
+  "revised_from": null,
+  "revision_notes": null
+}

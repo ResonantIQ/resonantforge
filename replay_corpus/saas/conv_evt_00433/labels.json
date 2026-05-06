@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00433",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by validating the customer's frustration and acknowledging their loyalty. All seven extracted factual claims are appropriately qualified (e.g., 'typically,' 'usually,' 'if it goes through') and align with standard payment processing workflows. The agent provides clear next steps (update card, retry payment, contact bank if needed) with concrete timeframes (15 minutes for confirmation) and maintains a warm, supportive tone throughout.",
+  "revised_from": null,
+  "revision_notes": null
+}

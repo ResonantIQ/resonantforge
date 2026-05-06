@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00253",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy, takes clear ownership with specific commitments (audit by 10 AM, resource link within the hour), and provides actionable interim guidance. Claims are appropriately qualified (\"may have exceeded,\" \"typically causes\") and supported by account investigation. Tone is professional yet personable, and all factual assertions were correctly extracted.",
+  "revised_from": null,
+  "revision_notes": null
+}

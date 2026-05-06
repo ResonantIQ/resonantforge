@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00278",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate technical guidance (401 errors relate to authentication, API keys can expire, proper navigation to settings), demonstrated strong empathy by acknowledging the customer's confusion and providing patient step-by-step direction, and delivered complete resolution with the customer confirming success. All extracted claims are well-supported by standard API authentication practices and the agent's tone is warm and professional throughout.",
+  "revised_from": null,
+  "revision_notes": null
+}

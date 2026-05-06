@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00030",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong diagnostic skills by guiding the customer to self-identify the validation warning, provided accurate technical information about the reserved keyword issue, and achieved full resolution. Tone is warm and professional throughout, with genuine acknowledgment of the frustrating error messaging and commitment to future improvements.",
+  "revised_from": null,
+  "revision_notes": null
+}

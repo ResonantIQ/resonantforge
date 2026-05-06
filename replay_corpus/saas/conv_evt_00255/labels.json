@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00255",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy, acknowledges the customer's frustration and business urgency, and provides clear ownership with specific next steps (workaround + escalation + personal follow-up). All factual claims are appropriately qualified ('may have affected', 'usually has a fix deployed within 24-48 hours') and the tone balances professionalism with genuine helpfulness. The six extracted claims accurately represent the agent's commitments and technical assessments.",
+  "revised_from": null,
+  "revision_notes": null
+}

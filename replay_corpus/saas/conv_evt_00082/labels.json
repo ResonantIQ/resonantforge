@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00082",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, actionable guidance on locating the Team Management feature, confirmed custom role creation is possible, and clearly explained how to apply roles to both new and existing members. The tone is warm and helpful without being overly casual, and the customer achieved full resolution. All seven extracted claims are well-supported by the agent's prose.",
+  "revised_from": null,
+  "revision_notes": null
+}

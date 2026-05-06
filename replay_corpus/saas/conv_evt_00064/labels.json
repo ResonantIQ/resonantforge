@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00064",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate technical guidance, correctly diagnosing the API key issue and explaining the difference between key expiration and regeneration mechanics. The tone is friendly and helpful without being robotic, empathy is demonstrated through acknowledgment of frustration, and resolution is clear with immediate next steps. All four extracted claims align with typical SaaS security practices.",
+  "revised_from": null,
+  "revision_notes": null
+}

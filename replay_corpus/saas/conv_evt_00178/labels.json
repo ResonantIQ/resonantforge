@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00178",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong empathy by reassuring the customer without judgment, provided accurate information about feature availability across plans, and guided the customer through troubleshooting steps that led to successful resolution. The tone was conversational and supportive, and the agent offered continued assistance. Customer self-resolved with agent support, confirming the feature worked as intended.",
+  "revised_from": null,
+  "revision_notes": null
+}

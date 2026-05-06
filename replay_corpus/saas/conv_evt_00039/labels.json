@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00039",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided clear, supportive guidance on plan upgrades with specific next steps (Billing tab, guides, direct support contact). All nine extracted claims are reasonable statements about platform functionality and support practices. Tone is warm and professional, customer received full resolution with multiple resource offers.",
+  "revised_from": null,
+  "revision_notes": null
+}

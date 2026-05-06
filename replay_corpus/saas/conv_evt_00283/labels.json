@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00283",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate technical troubleshooting (HTTP 429 is indeed a rate limit status code), demonstrated strong empathy by validating the customer's setup work, and guided the customer toward clear next steps (check backend traffic, then explore batching if needed). The tone is warm and professional without being overly casual. All three extracted claims are technically sound and appropriately contextualized within the conversation flow.",
+  "revised_from": null,
+  "revision_notes": null
+}

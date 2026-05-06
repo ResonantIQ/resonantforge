@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00340",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong diagnostic reasoning by correlating increased query volume with performance issues, showed genuine empathy by validating the customer's experience, and provided concrete next steps with a scheduled optimization call and immediate performance tips. All extracted claims are properly supported by the agent's narrative and represent standard SaaS product behavior.",
+  "revised_from": null,
+  "revision_notes": null
+}

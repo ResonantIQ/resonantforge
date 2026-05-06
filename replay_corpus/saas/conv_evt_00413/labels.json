@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00413",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong technical diagnosis, identifies root cause from logs, shows empathy for the customer's situation, and provides immediate concrete resolution (temporary rate limit increase with specific parameters). All four extracted claims are clearly stated and actionable. Communication is professional yet approachable, and customer receives clear next steps.",
+  "revised_from": null,
+  "revision_notes": null
+}

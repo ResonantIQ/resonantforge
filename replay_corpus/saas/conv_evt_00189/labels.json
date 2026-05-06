@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00189",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong diagnostic skills by progressively identifying the root cause (asynchronous field updates), validated the customer's setup, and provided a clear, actionable solution with specific implementation steps. Empathy is evident throughout, and the tone is professional yet conversational. The four extracted claims are appropriately identified from the agent's explanation of the known issue and recommended workaround.",
+  "revised_from": null,
+  "revision_notes": null
+}

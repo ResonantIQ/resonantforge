@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00196",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "Agent makes an unsupported generalization ('A lot of times that clears up these timeout gremlins') presented as fact without qualification, and commits to specific timeframes ('within a couple hours' and 'within the hour') that lack proper authorization or verification from backend/engineering teams. The agent offers to manually build the workflow but provides no mechanism for tracking or accountability beyond a verbal promise.",
+  "revised_from": null,
+  "revision_notes": null
+}

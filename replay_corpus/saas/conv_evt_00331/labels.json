@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00331",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong diagnostic approach by asking clarifying questions, identifying a partial root cause (15-20% client pause), and providing specific, actionable next steps (Cohort Analysis report). The tone is professional yet personable, empathy is shown through acknowledgment of the customer's concern, and all seven extracted claims are appropriately qualified or grounded in typical system behavior.",
+  "revised_from": null,
+  "revision_notes": null
+}

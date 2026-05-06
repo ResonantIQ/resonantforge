@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00005",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by acknowledging the documentation gap, takes ownership of the issue, and provides clear next steps with concrete examples and resources. All factual claims are appropriately qualified (e.g., 'we could surface those better,' 'I'll be honest') and the tone balances professionalism with genuine helpfulness. The customer's problem is fully resolved with actionable guidance.",
+  "revised_from": null,
+  "revision_notes": null
+}

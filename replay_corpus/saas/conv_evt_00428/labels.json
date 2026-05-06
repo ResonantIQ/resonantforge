@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00428",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent effectively diagnosed the customer's problem, provided clear pricing comparisons with concrete math ($500-1000 overage vs. $100 upgrade difference), and executed the upgrade seamlessly with no service gap. Tone is conversational and professional, empathy is demonstrated through validation of the customer's concerns, and all 12 extracted factual claims are clearly stated in the prose.",
+  "revised_from": null,
+  "revision_notes": null
+}

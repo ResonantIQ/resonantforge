@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00182",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy, provides immediate troubleshooting and a viable workaround while escalating to engineering, makes appropriately qualified claims (e.g., 'typically' for timeline, 'seems like' for diagnosis), commits to daily updates with specific ownership, and maintains a professional yet personable tone throughout. The extracted claims are accurate and well-supported by the conversation context.",
+  "revised_from": null,
+  "revision_notes": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00326",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy, acknowledges the documentation gap transparently, provides specific and actionable next steps (v2 endpoint URL, key regeneration, test event), and commits to internal follow-up. All six extracted claims are clearly stated in the prose and appear reasonable for a SaaS webhook integration context. Tone is professional yet conversational and appropriately matches brand voice.",
+  "revised_from": null,
+  "revision_notes": null
+}

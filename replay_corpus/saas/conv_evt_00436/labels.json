@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00436",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "Agent made unsupported factual claims without verification: stating a payment processing issue occurred and access restrictions were triggered, when the actual cause of the connection timeout error was never confirmed. The agent accepted payment card details verbally and processed them without documented customer authorization or PCI-DSS compliant procedures, creating significant security and liability risk. While empathy and resolution were handled well, the accuracy failures on core claims and compliance violations constitute clear failures.",
+  "revised_from": null,
+  "revision_notes": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00106",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, step-by-step guidance to resolve an OAuth authentication issue, correctly identifying the redirect URI location and format. The tone is friendly and supportive, the customer achieved successful resolution, and three factual claims were appropriately extracted from the technical guidance provided.",
+  "revised_from": null,
+  "revision_notes": null
+}

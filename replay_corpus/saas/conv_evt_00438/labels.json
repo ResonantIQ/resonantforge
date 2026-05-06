@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00438",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong empathy by acknowledging urgency, provided accurate technical guidance (billing address mismatch as common cause, self-service card update as secure option), and achieved clear resolution with customer regaining dashboard access. The agent appropriately pivoted when customer expressed security concerns about sharing card details over chat, and all extracted claims are well-supported by standard SaaS billing system behavior.",
+  "revised_from": null,
+  "revision_notes": null
+}

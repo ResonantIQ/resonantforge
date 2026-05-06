@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00352",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": true
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail",
+    "claim_extraction_stress"
+  ],
+  "rationale": "The agent's prose contains multiple factual/technical claims (browser cache effects, background filters consuming resources, response time variability) that should have been extracted but were marked with [?] instead of being properly validated. The agent deflects troubleshooting onto the customer multiple times before escalating, and provides no concrete timeline or ownership statement for resolution, leaving the customer in limbo.",
+  "revised_from": null,
+  "revision_notes": null
+}

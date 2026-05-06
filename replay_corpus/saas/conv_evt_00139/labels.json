@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00139",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": true,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail"
+  ],
+  "rationale": "The agent fails on resolution by providing no concrete next steps, ownership, or timeline. Claims like 'Our team will review your account' and 'Someone from our team will be in touch' lack specificity\u2014no ticket number, SLA, or escalation path is offered despite the customer explicitly stating urgency ('impacting our users'). The agent deflects accountability ('I can't give you an exact timeline') rather than committing to follow-up.",
+  "revised_from": null,
+  "revision_notes": null
+}

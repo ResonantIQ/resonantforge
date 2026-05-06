@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00309",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent successfully diagnosed the feature limitation, validated the customer's frustration, and negotiated a favorable upgrade path with a concrete promotional offer. All nine extracted claims are reasonable and properly contextualized within the conversation flow. The agent demonstrated empathy, clear resolution steps, and maintained a professional yet conversational brand voice throughout.",
+  "revised_from": null,
+  "revision_notes": null
+}

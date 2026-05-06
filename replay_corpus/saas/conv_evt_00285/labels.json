@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00285",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong empathy by acknowledging the customer's volume challenge, presented multiple viable options (upgrade or optimization), provided specific pricing and activation timelines, and assigned clear next steps with a 24-hour callback commitment. All factual claims are reasonable and appropriately qualified (e.g., 'usually takes less than 10 minutes').",
+  "revised_from": null,
+  "revision_notes": null
+}

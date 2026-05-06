@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00387",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, directly relevant answers to all three customer questions with appropriate qualifications (e.g., 'optional based on your preferences'). Tone is warm and professional, empathy is demonstrated through proactive help offers, and resolution is clear with next steps. Eight distinct factual claims were correctly extracted.",
+  "revised_from": null,
+  "revision_notes": null
+}

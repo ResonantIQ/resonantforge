@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00385",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided clear, actionable guidance for webhook setup in production, correctly identified the system's automatic secret generation, cited updated documentation, and gave specific rate-limit details with fallback strategies. The tone is friendly and professional, empathy is demonstrated through proactive help, and resolution is achieved with an open invitation for follow-up support.",
+  "revised_from": null,
+  "revision_notes": null
+}

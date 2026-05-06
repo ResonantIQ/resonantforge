@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00092",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent effectively diagnosed the issue, provided a clear explanation of the 24-hour initialization policy, took proactive action to resolve it immediately, and offered helpful follow-up guidance. The tone is warm and professional, empathy is demonstrated through acknowledgment of urgency, and the customer achieved their desired outcome with specific next steps provided.",
+  "revised_from": null,
+  "revision_notes": null
+}

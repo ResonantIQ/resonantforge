@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00323",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong technical knowledge, correctly identifies the HTTPS/HTTP protocol mismatch, and provides clear actionable steps. The tone is professional yet warm, empathy is shown through acknowledgment of the rollout urgency, and specific follow-up commitments (email within 2 hours, 24-hour response guarantee) establish clear ownership and resolution path.",
+  "revised_from": null,
+  "revision_notes": null
+}

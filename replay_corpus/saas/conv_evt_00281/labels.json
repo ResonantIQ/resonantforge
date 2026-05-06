@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00281",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate technical guidance (Bearer token authentication in v2.1), validated the customer's troubleshooting approach, and gave clear next steps (regenerate token in Settings > API Tokens). Tone is warm and professional, empathy is evident through reassurance, and the customer confirmed resolution clarity by committing to test. All three extracted claims are supported by the agent's prose.",
+  "revised_from": null,
+  "revision_notes": null
+}

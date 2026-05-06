@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00026",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by validating urgency, provides immediate relief (2000 req/min bump), clearly commits to a 30-minute pricing comparison, and offers a logical path forward with both temporary and long-term solutions. All extracted claims are accurate and properly supported by the conversation context. Tone is professional yet warm, matching brand voice expectations for a SaaS support interaction.",
+  "revised_from": null,
+  "revision_notes": null
+}

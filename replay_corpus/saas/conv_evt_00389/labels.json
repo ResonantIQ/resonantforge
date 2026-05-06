@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00389",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, helpful guidance by systematically walking through troubleshooting steps (refresh, cache clear, permissions check, sidebar inventory) and correctly identified the location of the workflow builder under Automations. The tone is professional yet warm, empathy is demonstrated through patient listening, and resolution is clear\u2014the customer found the feature and confirmed satisfaction.",
+  "revised_from": null,
+  "revision_notes": null
+}

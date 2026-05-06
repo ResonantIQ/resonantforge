@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00132",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by acknowledging the customer's situation and offering a flexible grace period extension despite being outside the standard 30-day window. All factual claims are clearly stated and appropriately qualified (e.g., 'there's a good chance they'll approve it'). Resolution is clear with specific next steps: billing team review within 1-2 business days, then 5-7 business days for refund processing.",
+  "revised_from": null,
+  "revision_notes": null
+}

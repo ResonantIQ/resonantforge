@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00313",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent proactively pulled account data, confirmed the upgrade request, explained timeline and billing implications clearly, and assured no service interruption. Claims are specific and actionable (upgrade live within minutes, pro-rata billing, confirmation email), tone is warm and helpful without being unprofessional, and next steps are clear. All 11 extracted claims are reasonable factual statements that an agent should be able to substantiate.",
+  "revised_from": null,
+  "revision_notes": null
+}

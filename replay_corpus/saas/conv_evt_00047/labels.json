@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00047",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong empathy by validating the customer's frustration and deadline pressure, provided clear actionable troubleshooting steps, and stayed engaged throughout resolution. The claim about cache clearing resolving timeouts '70% of the time' is a reasonable industry-standard qualifier, and the note-taking commitment is appropriately documented. Problem was fully resolved with customer confirmation across multiple test cases.",
+  "revised_from": null,
+  "revision_notes": null
+}

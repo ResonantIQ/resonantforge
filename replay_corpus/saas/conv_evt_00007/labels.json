@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00007",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail",
+    "overgeneralization"
+  ],
+  "rationale": "The agent makes unsupported claims about possible causes (batching issues, system adjustments, dashboard toggles) without any evidence that these apply to the customer's situation, and never actually confirms whether an escalation occurred despite the customer's explicit request. The agent deflects to documentation and dashboard self-help when the customer has already indicated they've checked these, creating a cycle rather than forward progress on a financial impact issue.",
+  "revised_from": null,
+  "revision_notes": null
+}

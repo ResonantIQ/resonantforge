@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00317",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, actionable guidance that directly resolved the customer's issue. All six extracted claims are verifiable and supported by the customer's successful resolution (HTTP to HTTPS requirement, toggle location, test event functionality). Response tone is professional and helpful without being robotic, and the conversation demonstrates clear ownership of guiding the customer to resolution.",
+  "revised_from": null,
+  "revision_notes": null
+}

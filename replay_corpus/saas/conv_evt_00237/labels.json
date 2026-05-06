@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00237",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong diagnostic troubleshooting by systematically ruling out possibilities (admin permissions, accessibility), correctly identified the root cause (basic auth validation), and provided clear, actionable guidance with specific UI navigation steps. The tone was empathetic, responsive to customer frustration, and the resolution was confirmed by the customer's successful outcome. All extracted claims are accurate and appropriately qualified.",
+  "revised_from": null,
+  "revision_notes": null
+}

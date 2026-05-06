@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00124",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong product knowledge, guides the customer systematically through the UI to locate the feature, and adjusts recommendations based on customer feedback. Tone is friendly and patient, acknowledging the customer's oversight without condescension. Resolution is clear with an open invitation for follow-up support.",
+  "revised_from": null,
+  "revision_notes": null
+}

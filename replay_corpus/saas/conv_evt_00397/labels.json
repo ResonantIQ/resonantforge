@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00397",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong troubleshooting methodology by asking clarifying questions upfront, ruling out basic causes methodically, and providing clear step-by-step instructions. The tone is warm and collaborative ('we'll figure it out together'), empathy is shown through acknowledgment of the customer's diligence, and resolution is concrete with a follow-up monitoring period. Both extracted claims are reasonable technical guidance.",
+  "revised_from": null,
+  "revision_notes": null
+}

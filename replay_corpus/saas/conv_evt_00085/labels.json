@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00085",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong empathy by acknowledging frustration, provided clear troubleshooting steps with specific timing expectations, and successfully resolved the issue. All four extracted factual claims are reasonable and appropriately qualified (e.g., 'might be a sync issue,' 'should populate within the next few minutes'). The conversational tone is warm and appropriate for the brand.",
+  "revised_from": null,
+  "revision_notes": null
+}

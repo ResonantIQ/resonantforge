@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00146",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent correctly diagnosed the issue (permission-level mismatch), provided clear troubleshooting steps, and delivered actionable next steps. The tone is warm and supportive throughout, acknowledging the customer's frustration while guiding them toward resolution. All three extracted claims are accurate and properly contextualized within the conversation flow.",
+  "revised_from": null,
+  "revision_notes": null
+}

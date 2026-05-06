@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00136",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "fail",
+  "expected_failures": {
+    "accuracy": true,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_fail"
+  ],
+  "rationale": "The agent's core technical guidance contains a critical factual error. The customer successfully resolved the issue using 'Authorization: Bearer {api_key}' format, but the agent insisted the correct header should be 'X-API-Key' instead. This directly contradicts the resolution that followed, making claim #3 demonstrably inaccurate. The agent provided incorrect technical information as definitive fact.",
+  "revised_from": null,
+  "revision_notes": null
+}

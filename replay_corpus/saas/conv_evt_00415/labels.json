@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00415",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provides clear, actionable guidance with specific navigation steps, plan limits, and testing procedures. All six extracted claims are properly supported by the agent's prose and presented as qualified facts. Tone is friendly and helpful without being overly casual, and the agent acknowledges the customer's needs throughout.",
+  "revised_from": null,
+  "revision_notes": null
+}

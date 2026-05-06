@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00301",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong troubleshooting methodology by systematically narrowing down the root cause (browser caching/extensions rather than platform issue), acknowledged customer frustration, and provided clear next steps with appropriate reassurance. All extracted claims are reasonable and appropriately qualified statements grounded in the troubleshooting context.",
+  "revised_from": null,
+  "revision_notes": null
+}

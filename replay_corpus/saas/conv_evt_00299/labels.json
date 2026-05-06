@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00299",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy, acknowledges the customer's frustration, and provides a clear, actionable workaround (batching fields in groups of 5). The technical claims are appropriately qualified and grounded in known system behavior. Resolution is concrete with explicit invitation for follow-up.",
+  "revised_from": null,
+  "revision_notes": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00402",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong empathy by acknowledging frustration, asked clarifying questions to diagnose the root cause, and provided a clear step-by-step resolution that successfully resolved the issue. The three extracted factual claims are all supported by the agent's prose and represent standard integration troubleshooting knowledge. The agent maintained a professional, helpful tone throughout and achieved customer satisfaction.",
+  "revised_from": null,
+  "revision_notes": null
+}

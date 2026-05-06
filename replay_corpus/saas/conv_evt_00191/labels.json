@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00191",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "medium",
+  "tags": [
+    "organic",
+    "high_confidence_pass",
+    "borderline"
+  ],
+  "rationale": "Agent provided clear, step-by-step guidance with specific UI locations, actionable validation instructions, and confirmed feature integration. The tone is professional and helpful throughout. The only minor uncertainty is whether claims 1\u20133 about UI element locations (tab name, position, button placement) are accurate without internal verification, which prevents a 'high' confidence rating, though the customer's own experience suggests the guidance was correct.",
+  "revised_from": null,
+  "revision_notes": null
+}

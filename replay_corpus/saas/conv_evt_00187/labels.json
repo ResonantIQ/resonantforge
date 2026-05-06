@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00187",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by validating urgency and frustration, provides clear ownership with specific commitments (9 AM delivery, 24-hour review SLA, personal oversight), and maintains professional yet warm tone. All 8 extracted claims are directly supported by the prose and represent concrete, testable commitments tied to the customer's end-of-week deadline.",
+  "revised_from": null,
+  "revision_notes": null
+}

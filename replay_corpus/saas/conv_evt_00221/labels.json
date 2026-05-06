@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00221",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate, actionable guidance (Settings > Team & Access > Role Management) that the customer confirmed solved their issue. The agent demonstrated strong empathy, maintained a helpful and professional tone, and ensured resolution by offering ongoing support. All four extracted claims are accurate and appropriately grounded.",
+  "revised_from": null,
+  "revision_notes": null
+}

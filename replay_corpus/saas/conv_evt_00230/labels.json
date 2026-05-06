@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00230",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate technical guidance that resolved the customer's issue, correctly identified the syntax errors (sentiment vs sentiment_score, single vs double equals), and directed the customer to proper documentation. Tone is helpful and professional while remaining approachable, and all five extracted claims are clearly stated in the conversation.",
+  "revised_from": null,
+  "revision_notes": null
+}

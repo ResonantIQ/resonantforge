@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00212",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate troubleshooting guidance, correctly identified the root cause (missing webhooks:write scope), and gave clear step-by-step navigation instructions that the customer successfully followed. Tone is professional yet warm, empathy is demonstrated through acknowledgment and follow-up support, and all seven extracted claims are reasonable, well-qualified, and supported by the successful resolution.",
+  "revised_from": null,
+  "revision_notes": null
+}

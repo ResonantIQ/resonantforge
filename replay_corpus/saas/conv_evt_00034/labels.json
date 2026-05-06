@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00034",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate product guidance (correct menu navigation, plan-specific limits), acknowledged the customer's constraints empathetically, offered both immediate workarounds and upgrade paths, and delivered clear next steps for the login issue. Tone was warm and professional throughout, with appropriate closing that reinforced support availability.",
+  "revised_from": null,
+  "revision_notes": null
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00161",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "The agent demonstrated strong empathy by immediately validating the customer's concern, provided accurate processing time expectations with appropriate qualifiers, and guided the customer to self-resolution. The tone is warm and professional, the extracted factual claims are reasonable and supported by context, and the conversation concluded with clear reassurance and an open door for future support.",
+  "revised_from": null,
+  "revision_notes": null
+}

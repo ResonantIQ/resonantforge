@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00404",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong problem-solving by accurately diagnosing the issue, offering two tiered solutions (temporary boost vs. enterprise upgrade), and executing the preferred option with a specific timeline. Empathy is evident through validation of the customer's scaling challenge and proactive optimization suggestions. All seven extracted claims are properly grounded in the agent's dialogue and represent clear commitments (plan details, rate limit increase, email confirmation, follow-up scheduling).",
+  "revised_from": null,
+  "revision_notes": null
+}

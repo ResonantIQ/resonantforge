@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00226",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy, acknowledges the customer's deadline pressure, and methodically troubleshoots the issue through diagnostic steps. The resolution is clear and actionable\u2014breaking exports by month\u2014with appropriate escalation to the backend team for future optimization. All extracted claims are appropriately qualified (e.g., 'shouldn't cause timeouts,' 'might be hitting a limit') rather than absolute statements.",
+  "revised_from": null,
+  "revision_notes": null
+}

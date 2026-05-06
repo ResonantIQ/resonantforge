@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00270",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrated strong empathy by acknowledging urgency, asked clarifying diagnostic questions, and systematically guided the customer to self-identify and resolve the root cause (Sandbox vs. Production key confusion). Three factual claims were accurately extracted and are verifiable technical specifications. The tone is professional yet conversational, and the interaction concluded with a clear answer to the rate-limit follow-up question and an open offer for future support.",
+  "revised_from": null,
+  "revision_notes": null
+}

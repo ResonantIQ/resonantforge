@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00176",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided accurate technical guidance (HMAC-SHA256 authentication, raw body requirement, X-Webhook-Signature header), included a concrete code example, and systematically debugged the customer's 401 error. The agent demonstrated strong empathy by acknowledging the customer's confusion and providing clear next steps, ultimately resolving the issue. All extracted claims are well-supported and accurate to standard webhook authentication practices.",
+  "revised_from": null,
+  "revision_notes": null
+}

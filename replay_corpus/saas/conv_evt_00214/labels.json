@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00214",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong troubleshooting by identifying the root cause (toggle off despite user setting it on), takes direct action to resolve it, and provides clear testing instructions with realistic timelines. Empathy is present throughout, tone is professional yet conversational, and all seven extracted claims are appropriately supported by the agent's diagnostic steps and system access.",
+  "revised_from": null,
+  "revision_notes": null
+}

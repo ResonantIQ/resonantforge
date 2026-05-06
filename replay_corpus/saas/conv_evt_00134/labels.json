@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00134",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent provided empathetic, methodical troubleshooting that led to successful resolution. The guidance was accurate (custom attributes do require explicit mapping/enablement in automation builders), claims were properly extracted, and the agent maintained a helpful, conversational tone throughout. Customer explicitly confirmed the solution worked.",
+  "revised_from": null,
+  "revision_notes": null
+}

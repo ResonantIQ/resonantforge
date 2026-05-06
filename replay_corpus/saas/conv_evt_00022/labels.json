@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00022",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by acknowledging frustration, systematically gathers relevant diagnostic data (timestamps, event volume, endpoint details), provides a clear hypothesis about retry mechanism behavior, and takes concrete action (enabling detailed logging) with specific follow-up steps. All seven extracted claims are reasonable operational statements that align with typical SaaS webhook behavior and the agent's stated capabilities.",
+  "revised_from": null,
+  "revision_notes": null
+}

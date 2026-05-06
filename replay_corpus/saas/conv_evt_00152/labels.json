@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00152",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong troubleshooting methodology by systematically identifying the problem (403 permissions error), asking clarifying questions, and providing concrete next steps (token regeneration, endpoint whitelisting). The tone is appropriately professional yet warm, empathy is shown through acknowledgment of the issue, and the extracted claims are reasonable technical explanations with appropriate hedging language ('usually', 'sometimes', 'can cause'). The conversation concludes with clear ownership and invitation for follow-up.",
+  "revised_from": null,
+  "revision_notes": null
+}

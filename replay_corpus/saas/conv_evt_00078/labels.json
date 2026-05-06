@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00078",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent accurately diagnosed the permission issue, demonstrated empathy for the customer's frustration, and provided a clear resolution path (sending a guide and directing the customer to their account owner). The tone is professional yet friendly, and all five extracted factual claims about the Pro plan, custom roles visibility, permission requirements, and security reasons are appropriately stated and supported by the conversation context.",
+  "revised_from": null,
+  "revision_notes": null
+}

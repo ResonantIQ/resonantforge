@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00274",
+  "label_version": 1,
+  "labeled_at": "2026-05-06",
+  "labeled_by": "claude-haiku-4-5-first-pass",
+  "expected_outcome": "pass",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false
+  },
+  "confidence": "high",
+  "tags": [
+    "skipped_during_generation",
+    "organic",
+    "high_confidence_pass"
+  ],
+  "rationale": "Agent demonstrates strong empathy by acknowledging the 24-hour delay as unacceptable ('That's on us'), takes ownership through immediate action (manual feature activation), and provides clear resolution steps. The tone is appropriately casual and energetic without being unprofessional. All seven extracted claims are reasonable and supported by the interaction context, with proper acknowledgment of standard sync delays balanced against accountability for the extended wait time.",
+  "revised_from": null,
+  "revision_notes": null
+}
