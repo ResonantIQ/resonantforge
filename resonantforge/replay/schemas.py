@@ -144,6 +144,7 @@ VALID_TAGS = frozenset({
     "overgeneralization",
     "planted",
     "organic",
+    "skipped_during_generation",
 })
 
 REQUIRED_FAILURE_KEYS = frozenset({"accuracy", "empathy", "resolution", "brand_voice", "claim_extraction"})

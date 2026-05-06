@@ -106,6 +106,7 @@ Zero or more tags from the **closed vocabulary** below. Tags enable filtering in
 | `"overgeneralization"` | Agent drops a constraint present in the KB chunk. |
 | `"planted"` | Conversation was a planted-quality case (has a `quality_plan`). |
 | `"organic"` | Conversation was organically generated (no `quality_plan`). |
+| `"skipped_during_generation"` | Conversation was skipped by the pipeline during generation (POST-GEN SKIP path). Written automatically by `extract-envelopes`. |
 
 Multiple tags may be applied. Tags are additive — a conversation can be both `"edge_case"` and `"high_confidence_fail"`.
 
