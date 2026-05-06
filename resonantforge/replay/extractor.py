@@ -33,6 +33,7 @@ from resonantforge.schemas import (
     RubricTarget,
     KnowledgeCitations,
     ConversationRecord,
+    SkippedConversationRecord,
 )
 from resonantforge.utils.atomic_write import read_jsonl_robust
 from resonantforge.validators.extractors.accuracy import (
@@ -66,6 +67,16 @@ def _read_conversations(profile_dir: Path) -> list[ConversationRecord]:
     records = []
     for line in read_jsonl_robust(conv_path):
         records.append(ConversationRecord.model_validate(line))
+    return records
+
+
+def _read_skipped_conversations(profile_dir: Path) -> list[SkippedConversationRecord]:
+    skip_path = profile_dir / "skipped_conversations.jsonl"
+    if not skip_path.exists():
+        return []
+    records = []
+    for line in read_jsonl_robust(skip_path):
+        records.append(SkippedConversationRecord.model_validate(line))
     return records
 
 
@@ -125,12 +136,18 @@ def _brand_voice_config(profile_name: str) -> BrandVoiceConfig:
     return BrandVoiceConfig(variant_id=variant_id, feature_profiles=feature_profiles)
 
 
-def _write_label_template(output_dir: Path, conv_id: str) -> None:
+def _write_label_template(
+    output_dir: Path,
+    conv_id: str,
+    *,
+    skipped_during_generation: bool = False,
+) -> None:
     """Write an empty labels.json template if one doesn't already exist."""
     label_path = output_dir / "labels.json"
     if label_path.exists():
         return  # never overwrite human-authored labels
 
+    tags = ["skipped_during_generation"] if skipped_during_generation else []
     template = {
         "schema_version": _SCHEMA_VERSION,
         "conv_id": conv_id,
@@ -146,7 +163,7 @@ def _write_label_template(output_dir: Path, conv_id: str) -> None:
             "claim_extraction": False,
         },
         "confidence": "low",
-        "tags": [],
+        "tags": tags,
         "rationale": "FILL_IN",
         "revised_from": None,
         "revision_notes": None,
@@ -161,6 +178,7 @@ def extract_envelopes(
     profile_name: str,
     anthropic_client: Any,
     conv_filter: Optional[list[str]] = None,
+    include_skipped: bool = False,
     progress_callback: Optional[Callable[[str, int, int], None]] = None,
 ) -> list[str]:
     """
@@ -174,12 +192,18 @@ def extract_envelopes(
       4. Writes {replay_corpus_dir}/{conv_id}/envelope.json
       5. Writes {replay_corpus_dir}/{conv_id}/labels.json template (if absent)
 
+    When include_skipped=True, also processes skipped_conversations.jsonl.
+    Only skipped records with final_prose (POST-GEN SKIP path) are extractable;
+    API-error skips with no prose are silently skipped. labels.json templates
+    for skipped convs are tagged with "skipped_during_generation".
+
     Args:
         profile_dir: path to the profile's output directory (e.g. corpus/saas)
         replay_corpus_dir: root of the replay corpus (e.g. replay_corpus/saas)
         profile_name: profile identifier ("saas", "ps", etc.)
         anthropic_client: live Anthropic client for extract_claims_llm
         conv_filter: if provided, only extract these conv_ids
+        include_skipped: if True, also extract from skipped_conversations.jsonl
         progress_callback: called as (conv_id, index_1based, total) per conversation
 
     Returns:
@@ -201,8 +225,18 @@ def extract_envelopes(
         filter_set = set(conv_filter)
         conversations = [c for c in conversations if c.conversation_id in filter_set]
 
+    # Load skipped convs upfront so total count is correct for progress reporting.
+    # Only records with final_prose are extractable (POST-GEN SKIP path).
+    skipped_to_process: list[SkippedConversationRecord] = []
+    if include_skipped:
+        all_skipped = _read_skipped_conversations(profile_dir)
+        if conv_filter:
+            filter_set_s = set(conv_filter)
+            all_skipped = [s for s in all_skipped if s.conversation_id in filter_set_s]
+        skipped_to_process = [s for s in all_skipped if s.final_prose is not None]
+
     extracted: list[str] = []
-    total = len(conversations)
+    total = len(conversations) + len(skipped_to_process)
 
     for idx, conv_record in enumerate(conversations, 1):
         conv_id = conv_record.conversation_id
@@ -283,6 +317,82 @@ def extract_envelopes(
 
         # Write label template (skipped if labels.json already exists)
         _write_label_template(output_dir, conv_id)
+
+        extracted.append(conv_id)
+
+    # Process skipped conversations (--include-skipped path).
+    # These use SkippedConversationRecord which has final_prose/event_id instead
+    # of prose/trigger_event_id. labels.json is tagged "skipped_during_generation".
+    for idx, skipped_record in enumerate(skipped_to_process, len(conversations) + 1):
+        conv_id = skipped_record.conversation_id
+        if progress_callback:
+            progress_callback(conv_id, idx, total)
+
+        agent_prose, customer_prose = _split_prose_turns(skipped_record.final_prose)  # type: ignore[arg-type]
+
+        quality_plan = quality_plans.get(conv_id)
+        if quality_plan is None:
+            quality_plan = QualityPlan(
+                conversation_id=conv_id,
+                trigger_event_id=skipped_record.event_id or conv_id,
+                rubric_targets=RubricTarget(),
+                knowledge_citations=KnowledgeCitations(),
+                prose_generation_directives="(skipped during generation — no quality plan resolved)",
+                kb_chunks_required=[],
+            )
+
+        extracted_claims = extract_claims_llm(
+            agent_prose=agent_prose,
+            anthropic_client=anthropic_client,
+        )
+
+        claims_payload = [c.model_dump(mode="json") for c in extracted_claims]
+        claims_canonical = json.dumps(
+            claims_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        )
+        claims_hash = "sha256:" + hashlib.sha256(claims_canonical.encode("utf-8")).hexdigest()
+
+        extraction_meta = ExtractionMeta(
+            model="claude-haiku-4-5-20251001",
+            prompt_version=_PROMPT_VERSION,
+            extracted_at=extraction_ts,
+            claims_hash=claims_hash,
+        )
+
+        envelope = ReplayEnvelope(
+            schema_version=_SCHEMA_VERSION,
+            conv_id=conv_id,
+            agent_prose=agent_prose,
+            customer_prose=customer_prose,
+            quality_plan=quality_plan,
+            kb_chunks=kb_chunks,
+            lexicons=lexicons,
+            brand_voice=bv_config,
+            validator_inputs=ValidatorInputs(
+                accuracy=AccuracyValidatorInputs(
+                    extracted_claims=extracted_claims,
+                    extraction_meta=extraction_meta,
+                )
+            ),
+            metadata=EnvelopeMetadata(
+                conv_id=conv_id,
+                source_corpus=str(profile_dir),
+                pipeline_version=pipeline_version,
+                kb_version=kb_version,
+                generator_version=pipeline_version,
+                extraction_timestamp=extraction_ts,
+            ),
+        )
+
+        output_dir = replay_corpus_dir / conv_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        envelope_path = output_dir / "envelope.json"
+        envelope_path.write_text(
+            json.dumps(envelope.model_dump(mode="json"), indent=2),
+            encoding="utf-8",
+        )
+
+        _write_label_template(output_dir, conv_id, skipped_during_generation=True)
 
         extracted.append(conv_id)
 

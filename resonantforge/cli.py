@@ -633,12 +633,20 @@ def replay_group() -> None:
     multiple=True,
     help="Limit extraction to specific conv_id(s). Repeatable. Default: all.",
 )
+@click.option(
+    "--include-skipped",
+    "include_skipped",
+    is_flag=True,
+    default=False,
+    help="Also extract envelopes from skipped_conversations.jsonl. labels.json templates for skipped convs are tagged 'skipped_during_generation'.",
+)
 def extract_envelopes(
     corpus_dir: Path,
     profile: str,
     replay_corpus_dir: Path,
     api_key: Optional[str],
     conv_ids: tuple[str, ...],
+    include_skipped: bool,
 ) -> None:
     """
     Extract frozen replay envelopes from an existing smoke corpus.
@@ -680,6 +688,7 @@ def extract_envelopes(
             profile_name=profile,
             anthropic_client=client,
             conv_filter=conv_filter,
+            include_skipped=include_skipped,
             progress_callback=_progress,
         )
     except Exception as exc:
