@@ -138,8 +138,8 @@ def extract_claims_llm(
         except anthropic.APIError as e:
             # Network failures, auth errors, rate limits — never gate the pipeline on these.
             logger.warning(
-                "extract_claims_llm: Anthropic API error — returning empty claims",
-                extra={"error": str(e)},
+                "extract_claims_llm: Anthropic API error — returning empty claims | error=%s",
+                str(e),
             )
             return []
 
@@ -151,16 +151,12 @@ def extract_claims_llm(
             raw_claims = json.loads(content)
         except (json.JSONDecodeError, ValueError) as exc:
             logger.warning(
-                "extract_claims_llm: JSON parse failed",
-                extra={
-                    "attempt": attempt + 1,
-                    "max_attempts": max_attempts,
-                    "exc_type": type(exc).__name__,
-                    "response_length": len(last_raw),
-                    "stop_reason": last_stop_reason,
-                    "excerpt_head": last_raw[:200],
-                    "excerpt_tail": last_raw[-200:],
-                },
+                "extract_claims_llm: JSON parse failed | attempt=%d/%d exc=%s"
+                " response_length=%d stop_reason=%s"
+                " excerpt_head=%.200r excerpt_tail=%.200r",
+                attempt + 1, max_attempts, type(exc).__name__,
+                len(last_raw), last_stop_reason,
+                last_raw[:200], last_raw[-200:],
             )
             continue  # retry with stricter prompt
 
@@ -193,8 +189,8 @@ def extract_claims_llm(
             # Pydantic rejected a field value (e.g. unknown claim_type literal) — treat as
             # schema mismatch, not a parse failure, so we don't retry on something unfixable.
             logger.warning(
-                "extract_claims_llm: Claim schema validation failed — returning empty claims",
-                extra={"error": str(e)},
+                "extract_claims_llm: Claim schema validation failed — returning empty claims | error=%s",
+                str(e),
             )
             return []
 

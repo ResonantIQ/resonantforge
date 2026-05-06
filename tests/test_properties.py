@@ -2495,16 +2495,14 @@ def test_extract_claims_logs_on_parse_failure(caplog: pytest.LogCaptureFixture) 
         f"Assertion 32 — expected 3 'JSON parse failed' warnings (one per attempt), "
         f"got {len(parse_fail_records)}"
     )
-    rec = parse_fail_records[0]
-    assert hasattr(rec, "response_length"), "Assertion 32 — log must include response_length"
-    assert hasattr(rec, "stop_reason"), "Assertion 32 — log must include stop_reason"
-    assert hasattr(rec, "excerpt_head"), "Assertion 32 — log must include excerpt_head"
-    assert hasattr(rec, "excerpt_tail"), "Assertion 32 — log must include excerpt_tail"
-    assert rec.stop_reason == "end_turn", (
-        f"Assertion 32 — stop_reason should be 'end_turn', got {rec.stop_reason!r}"
-    )
-    assert rec.response_length == len("THIS IS NOT JSON AT ALL"), (
-        f"Assertion 32 — response_length should be full response length"
+    # Fields must appear in the formatted message (not just as LogRecord attributes via
+    # extra={}) so they are visible in any log handler, including plain StreamHandler.
+    msg = parse_fail_records[0].getMessage()
+    assert "stop_reason" in msg, f"Assertion 32 — stop_reason missing from log message: {msg!r}"
+    assert "response_length" in msg, f"Assertion 32 — response_length missing from log message: {msg!r}"
+    assert "end_turn" in msg, f"Assertion 32 — stop_reason value missing from log message: {msg!r}"
+    assert str(len("THIS IS NOT JSON AT ALL")) in msg, (
+        f"Assertion 32 — response_length value missing from log message: {msg!r}"
     )
 
 

@@ -189,3 +189,34 @@ def test_successful_extraction_does_not_add_claim_extraction_verdict():
     assert len(claims) == 1
     # No ClaimExtractionError was raised — in the pipeline, claim_extraction_error stays None
     # and no extra verdict is appended. This test verifies the happy path is unaffected.
+
+
+# ---------------------------------------------------------------------------
+# RFORGE-27: structured log fields must appear in the log output
+# ---------------------------------------------------------------------------
+
+def test_json_parse_failure_log_contains_structured_fields(caplog):
+    """
+    Key fields (stop_reason, response_length) must appear in the warning log text.
+    Previously these were passed via extra={} which Python's default logger silently drops.
+    """
+    import logging
+
+    client = _make_anthropic_client(
+        "not json",   # attempt 1
+        "not json",   # attempt 2
+        "not json",   # attempt 3
+        stop_reason="max_tokens",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="resonantforge.validators.extractors.accuracy"):
+        with pytest.raises(ClaimExtractionError):
+            extract_claims_llm(AGENT_PROSE, anthropic_client=client, max_attempts=3)
+
+    warning_texts = [r.message for r in caplog.records if "JSON parse failed" in r.message]
+    assert warning_texts, "expected at least one 'JSON parse failed' warning"
+
+    first = warning_texts[0]
+    assert "stop_reason" in first, f"stop_reason missing from log: {first!r}"
+    assert "response_length" in first, f"response_length missing from log: {first!r}"
+    assert "max_tokens" in first, f"stop_reason value missing from log: {first!r}"
