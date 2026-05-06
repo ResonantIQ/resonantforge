@@ -560,7 +560,7 @@ class QualityPlanInjector:
             coaching_dim = "accuracy"
 
         return QualityPlan(
-            conversation_id=f"conv_planted_{conv_event.event_id}",
+            conversation_id=f"conv_{conv_event.event_id}",
             trigger_event_id=conv_event.event_id,
             rubric_targets=rubric,
             knowledge_citations=citations,

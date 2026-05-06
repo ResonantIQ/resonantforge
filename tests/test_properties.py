@@ -3028,3 +3028,64 @@ def test_resolution_recognizes_hyphenated_temporal_range() -> None:
         f"got next_steps_actionable={signals.next_steps_actionable}, "
         f"next_steps_present={signals.next_steps_present}"
     )
+
+
+# ---------------------------------------------------------------------------
+# RFORGE-25: quality plan conversation_id must match pipeline conv_id format
+# ---------------------------------------------------------------------------
+
+def test_quality_plan_conv_id_matches_pipeline_naming() -> None:
+    """
+    Assertion 37 — QualityPlanInjector must produce conversation_id = f"conv_{event_id}".
+
+    The pipeline generates conv_ids as f"conv_{event.event_id}" (pipeline.py:1181).
+    The extractor matches quality plans to passed conversations by conv_id. If the
+    injector uses a different prefix (e.g. "conv_planted_"), the extractor can never
+    join quality plans to their conversations, making planted-quality replay impossible.
+    """
+    import random as _random
+    from datetime import datetime, timezone as _tz
+    from resonantforge.layer1.quality_plan_injector import QualityPlanInjector
+    from resonantforge.schemas import KBChunk, SimEvent
+
+    event = SimEvent(
+        event_id="evt_rforge25_test",
+        event_type="conversation_started",
+        account_id="acct_test",
+        agent_id="agent_test",
+        timestamp=datetime(2026, 1, 1, 10, 0, tzinfo=_tz.utc),
+        day_index=0,
+        month_index=0,
+        payload={
+            "domain": "billing",
+            "intent": ["billing_dispute"],
+            "surface_channel": "intercom",
+            "customer_name": "Test Customer",
+            "agent_id": "agent_test",
+        },
+    )
+    kb_chunk = KBChunk(
+        chunk_id="kb_chunk_test_v1",
+        document_id="doc_test_v1",
+        document_path="test/doc.md",
+        chunk_text="Refunds are processed within 5 business days.",
+        domains=["billing"],
+        intent_tags=[],
+    )
+
+    injector = QualityPlanInjector(rng=_random.Random(42), profile_name="saas")
+    plans = injector.inject(
+        events=[event],
+        snapshots=[],
+        kb_chunks=[kb_chunk],
+        planted_count=1,
+    )
+
+    assert len(plans) >= 1, "Assertion 37 — expected at least one plan to be injected"
+    for plan in plans:
+        expected_conv_id = f"conv_{plan.trigger_event_id}"
+        assert plan.conversation_id == expected_conv_id, (
+            f"Assertion 37 — plan.conversation_id={plan.conversation_id!r} does not match "
+            f"pipeline naming convention f'conv_{{event_id}}'={expected_conv_id!r}. "
+            "This breaks extractor quality-plan matching."
+        )
