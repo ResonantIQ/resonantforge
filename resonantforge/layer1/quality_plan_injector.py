@@ -747,8 +747,10 @@ class QualityPlanInjector:
             if _rc is not None and is_conditional_chunk(_rc):
                 _new_acc = AccuracyLabel(status=rubric.accuracy.status, precision="conditional_applied")
                 rubric = rubric.model_copy(update={"accuracy": _new_acc})
-                if spec["type"] == "accuracy":
+                if spec["type"] in ("accuracy", "control"):
                     # Re-generate directives to reflect the rerouted precision.
+                    # Control plans also need this: without it their directive stays as the
+                    # generic preamble with no instruction to apply the conditional (RFORGE-35).
                     _cbi = {c.chunk_id: c for c in kb_chunks}
                     _sc = [_cbi[x] for x in citations.should_cite if x in _cbi]
                     _mnc = [_cbi[x] for x in citations.must_not_cite if x in _cbi]

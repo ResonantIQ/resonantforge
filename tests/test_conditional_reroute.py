@@ -428,3 +428,83 @@ def test_conditional_reroute_deterministic():
     }
     assert precisions_a == precisions_b, "Conditional reroute is not deterministic across runs"
     assert injector_a.conditional_reroute_count == injector_b.conditional_reroute_count
+
+
+# ── RFORGE-35: rerouted control plan directive regenerated ────────────────────
+
+
+def test_rerouted_control_plan_gets_conditional_applied_directive():
+    """
+    When a control plan is rerouted to conditional_applied, its
+    prose_generation_directives must be regenerated to the conditional_applied
+    directive — not left as the generic control preamble.
+
+    Without this fix the LLM receives "Write a model customer service interaction"
+    with no instruction to apply the conditional, producing negating language
+    that fails alignment==supported post-gen validation.
+    """
+    rng = random.Random(42)
+    injector = QualityPlanInjector(rng=rng)
+    events = [_make_conv_event(f"evt_{i:03d}") for i in range(80)]
+    # Only a conditional chunk in the billing domain — all control plans citing it
+    # will be rerouted to conditional_applied.
+    chunks = [ALLOW_CONDITION_CHUNK]
+
+    plans = injector.inject(events=events, snapshots=[], kb_chunks=chunks, planted_count=50)
+
+    # Find rerouted control plans: all-clean rubric except accuracy=conditional_applied
+    rerouted_control = [
+        p for p in plans
+        if (
+            p.rubric_targets.accuracy is not None
+            and p.rubric_targets.accuracy.status == "supported"
+            and p.rubric_targets.accuracy.precision == "conditional_applied"
+            and p.rubric_targets.empathy == "high"
+            and p.rubric_targets.resolution == "strong"
+            and p.rubric_targets.brand_voice_target == "on_brand"
+        )
+    ]
+    assert rerouted_control, (
+        "Expected at least one rerouted control plan (conditional_applied + all-clean rubric)"
+    )
+
+    generic_preamble = (
+        "Write a model customer service interaction. Agent should be empathetic"
+    )
+    for plan in rerouted_control:
+        assert generic_preamble not in plan.prose_generation_directives, (
+            f"Rerouted control plan {plan.conversation_id} still has generic preamble — "
+            f"directive was not regenerated after reroute.\n"
+            f"Got: {plan.prose_generation_directives[:200]!r}"
+        )
+        assert "correctly apply the conditional" in plan.prose_generation_directives, (
+            f"Rerouted control plan {plan.conversation_id} directive missing conditional_applied "
+            f"instruction.\nGot: {plan.prose_generation_directives[:200]!r}"
+        )
+
+
+def test_rerouted_control_plan_directive_contains_chunk_text():
+    """Rerouted control plan directive must embed the KB chunk text (same as accuracy plans)."""
+    rng = random.Random(42)
+    injector = QualityPlanInjector(rng=rng)
+    events = [_make_conv_event(f"evt_{i:03d}") for i in range(80)]
+    chunks = [ALLOW_CONDITION_CHUNK]
+
+    plans = injector.inject(events=events, snapshots=[], kb_chunks=chunks, planted_count=50)
+
+    rerouted_control = [
+        p for p in plans
+        if (
+            p.rubric_targets.accuracy is not None
+            and p.rubric_targets.accuracy.precision == "conditional_applied"
+            and p.rubric_targets.empathy == "high"
+            and p.rubric_targets.resolution == "strong"
+        )
+    ]
+    assert rerouted_control, "Expected at least one rerouted control plan"
+
+    for plan in rerouted_control:
+        assert ALLOW_CONDITION_CHUNK.chunk_text in plan.prose_generation_directives, (
+            f"Rerouted control plan directive missing chunk text.\n"
+            f"Got: {plan.prose_generation_directives[:300]!r}"
+        )
