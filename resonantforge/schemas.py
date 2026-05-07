@@ -154,6 +154,7 @@ class ConversationRecord(BaseModel):
     is_planted_quality: bool = False
     tone_variant: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
     planted_constraint: Optional[str] = None  # normalized constraint phrase for overgeneralization events
+    planted_contradiction: Optional[PlantedContradiction] = None  # fact/negation pair for contradicted:exact events
 
 
 class AccuracyLabel(BaseModel):
@@ -201,6 +202,22 @@ class KnowledgeCitations(BaseModel):
     must_not_cite: list[str] = Field(default_factory=list)  # chunk IDs or ["*"]
 
 
+class PlantedContradiction(BaseModel):
+    """
+    Ground-truth record for a planted contradicted:exact accuracy event.
+
+    ``kb_fact`` is the normalized original fact extracted from the KB chunk.
+    ``negated_form`` is the mutated claim the LLM is instructed to make —
+    deliberately contradicting kb_fact. The validator uses substring presence/
+    absence of these two strings against the generated agent response to
+    determine contradicted_flag without LLM involvement.
+    """
+
+    kb_fact: str        # normalized original fact (lowercase, whitespace-collapsed)
+    negated_form: str   # the contradiction the LLM was instructed to produce
+    fact_category: str  # "numeric" | "categorical" | "capability" | "policy"
+
+
 class QualityPlan(BaseModel):
     """
     Section 11.1 — directive driving prose generation for a planted conversation.
@@ -211,6 +228,8 @@ class QualityPlan(BaseModel):
     ``planted_constraint`` is set for overgeneralization plans: the specific
     constraint phrase extracted from the KB chunk that the generator is instructed
     to drop, enabling deterministic ground-truth validation.
+    ``planted_contradiction`` is set for contradicted:exact plans: the fact/negation
+    pair used for closed-loop validator grounding.
     """
 
     conversation_id: str
@@ -223,6 +242,8 @@ class QualityPlan(BaseModel):
     multi_chunk_required: bool = False
     kb_chunks_required: list[str] = Field(default_factory=list)  # ground truth chunks
     planted_constraint: Optional[str] = None  # normalized constraint phrase for overgeneralization events
+    planted_contradiction: Optional[PlantedContradiction] = None  # fact/negation pair for contradicted:exact events
+    planted_contradiction: Optional[PlantedContradiction] = None  # fact/negation pair for contradicted:exact events
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +403,7 @@ class AccuracySignals(BaseModel):
     alignment: Literal["supported", "contradicted", "partial", "not_found"]
     constraint_preserved: bool
     overgeneralization_flag: bool
+    contradicted_flag: bool = False  # closed-loop: negated_form present and kb_fact absent
     blocking_constraint_violated: bool
     multi_chunk_required: bool
     multi_chunk_satisfied: bool

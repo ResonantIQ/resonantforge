@@ -235,7 +235,12 @@ def validate_accuracy(signals: AccuracySignals, target: AccuracyLabel) -> Dimens
             not signals.constraint_preserved
         )
     elif status == "contradicted" and precision == "exact":
-        passed = signals.alignment == "contradicted"
+        # Closed-loop: when planted_contradiction was set, use the metadata-grounded
+        # contradicted_flag instead of the alignment score for a more reliable verdict.
+        if signals.contradicted_flag:
+            passed = True
+        else:
+            passed = signals.alignment == "contradicted"
     elif status == "insufficient_information":
         passed = (
             signals.alignment == "not_found" and
@@ -257,6 +262,7 @@ def validate_accuracy(signals: AccuracySignals, target: AccuracyLabel) -> Dimens
             "alignment": signals.alignment,
             "constraint_preserved": signals.constraint_preserved,
             "overgeneralization_flag": signals.overgeneralization_flag,
+            "contradicted_flag": signals.contradicted_flag,
             "blocking_constraint_violated": signals.blocking_constraint_violated,
             "multi_chunk_required": signals.multi_chunk_required,
             "multi_chunk_satisfied": signals.multi_chunk_satisfied,

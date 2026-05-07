@@ -439,6 +439,7 @@ def run_kb_alignment_pipeline(
     synonym_map: dict[str, str],
     top_k: int = 3,
     planted_constraint: str | None = None,
+    planted_contradiction: dict | None = None,
 ) -> AccuracySignals:
     """
     Steps 2–8: Deterministic KB alignment pipeline.
@@ -466,6 +467,9 @@ def run_kb_alignment_pipeline(
         top_k: unused (retained for backward-compatible call sites).
         planted_constraint: normalized constraint phrase for overgeneralization events;
             when set, replaces the regex-based Step 5 with a direct substring presence check.
+        planted_contradiction: dict with keys kb_fact, negated_form, fact_category for
+            contradicted:exact events; when set, Step 5b performs a closed-loop check:
+            negated_form present and kb_fact absent → contradicted_flag True.
 
     Returns:
         AccuracySignals capturing the full pipeline verdict.
@@ -479,6 +483,7 @@ def run_kb_alignment_pipeline(
             alignment="not_found",
             constraint_preserved=True,
             overgeneralization_flag=False,
+            contradicted_flag=False,
             blocking_constraint_violated=False,
             multi_chunk_required=len(kb_chunks_required) > 1,
             multi_chunk_satisfied=False,
@@ -495,6 +500,7 @@ def run_kb_alignment_pipeline(
             alignment="not_found",
             constraint_preserved=True,
             overgeneralization_flag=False,
+            contradicted_flag=False,
             blocking_constraint_violated=False,
             multi_chunk_required=False,
             multi_chunk_satisfied=False,
@@ -570,6 +576,19 @@ def run_kb_alignment_pipeline(
             for c in claims
         )
 
+    # Step 5b (override): planted-contradiction closed-loop check.
+    # Clean plant:    negated_form present AND kb_fact absent → contradicted_flag True
+    # Meta-commentary: both present                           → contradicted_flag False
+    # Not found:      negated_form absent                     → contradicted_flag False
+    contradicted_flag = False
+    if planted_contradiction is not None:
+        kb_fact_norm = " ".join(planted_contradiction["kb_fact"].lower().split())
+        negated_norm = " ".join(planted_contradiction["negated_form"].lower().split())
+        all_claims_text = " ".join(c.claim_text.lower() for c in claims)
+        negated_present = negated_norm in all_claims_text
+        kb_fact_present = kb_fact_norm in all_claims_text
+        contradicted_flag = negated_present and not kb_fact_present
+
     # Step 7: Multi-chunk satisfaction — all required chunks must appear in kb_chunks_used.
     multi_chunk_required = len(kb_chunks_required) > 1
     multi_chunk_satisfied = False
@@ -583,6 +602,7 @@ def run_kb_alignment_pipeline(
         alignment=aggregate_alignment,
         constraint_preserved=not overall_overgeneralization,
         overgeneralization_flag=overall_overgeneralization,
+        contradicted_flag=contradicted_flag,
         blocking_constraint_violated=blocking_violated,
         multi_chunk_required=multi_chunk_required,
         multi_chunk_satisfied=multi_chunk_satisfied,
@@ -598,6 +618,7 @@ def extract_accuracy_signals(
     anthropic_client: Anthropic | None = None,
     top_k: int = 3,
     planted_constraint: str | None = None,
+    planted_contradiction: dict | None = None,
 ) -> AccuracySignals:
     """
     Full 8-step accuracy extraction pipeline entry point.
@@ -633,4 +654,5 @@ def extract_accuracy_signals(
         synonym_map=synonym_map,
         top_k=top_k,
         planted_constraint=planted_constraint,
+        planted_contradiction=planted_contradiction,
     )

@@ -1,13 +1,19 @@
 """Quality plan injector — plants rubric-dimension targets into the organic event log."""
 
+import logging
 import math
 import random
+
 from resonantforge.kb.constraint_extractor import extract_constraints
+from resonantforge.kb.kb_fact_extractor import extract_facts
+from resonantforge.kb.negation import negate_fact
 from resonantforge.schemas import (
-    ConstraintType, KBChunk, QualityPlan, RubricTarget, AccuracyLabel,
+    ConstraintType, KBChunk, PlantedContradiction, QualityPlan, RubricTarget, AccuracyLabel,
     KnowledgeCitations, SimEvent, SimEventType, DaySnapshot, LifecycleStage,
 )
 from resonantforge.layer1.plan_validator import PlanValidator
+
+_logger = logging.getLogger(__name__)
 
 # Event types eligible for QualityPlan injection.  Raise ValueError on others.
 _ELIGIBLE_EVENT_TYPES = {SimEventType.CONVERSATION_STARTED}
@@ -126,6 +132,7 @@ def _prose_directive_for_accuracy(
     should_cite: list[KBChunk],
     must_not_cite: list[KBChunk],
     planted_constraint: str | None = None,
+    planted_contradiction: PlantedContradiction | None = None,
 ) -> str:
     """
     Return a plain-English prose generation directive for the accuracy dimension.
@@ -143,10 +150,18 @@ def _prose_directive_for_accuracy(
     ground its claims in — passing only chunk IDs produced zero-claim outputs.
     """
     if label.status == "contradicted":
-        base = (
-            "Agent should make a claim about refund/policy that directly contradicts the KB. "
-            "The claim should be specific and verifiable."
-        )
+        if planted_contradiction is not None:
+            base = (
+                f"Rewrite the agent's response to state the following claim as established fact:\n"
+                f'"{planted_contradiction.negated_form}"\n\n'
+                f"The above claim directly contradicts the KB policy. State only the contradicting "
+                f"claim — do not quote the original policy alongside it."
+            )
+        else:
+            base = (
+                "Agent should make a claim that directly contradicts the KB. "
+                "The claim should be specific and verifiable."
+            )
         base += _render_chunk_blocks("KB policy content to contradict:", should_cite)
         return base
     if label.precision == "overgeneralized":
@@ -505,6 +520,7 @@ class QualityPlanInjector:
         kb_required: list[str] = []
         coaching_dim: str
         planted_constraint: str | None = None
+        planted_contradiction: PlantedContradiction | None = None
 
         if spec["type"] == "control":
             rubric = ALL_CLEAN_TARGETS
@@ -601,6 +617,40 @@ class QualityPlanInjector:
                     citations = KnowledgeCitations(should_cite=[], must_not_cite=deny_ids)
                     kb_required = []
                 multi_chunk = False
+            elif label.status == "contradicted" and label.precision == "exact":
+                # Pre-filter: only chunks with extractable, contradictable facts qualify.
+                fact_bearing_pool = [c for c in pick_pool_capped if extract_facts(c.chunk_text)]
+
+                # Pool instrumentation: warn when diversity is too low for reliable seeding.
+                if len(fact_bearing_pool) < 3:
+                    _logger.warning(
+                        "pool_starvation: fact-bearing pool=%d < 3 for contradicted:exact event_id=%s",
+                        len(fact_bearing_pool),
+                        conv_event.event_id,
+                    )
+
+                allow_chunk_c: KBChunk | None = _pick_from(fact_bearing_pool)
+
+                if allow_chunk_c is not None:
+                    facts = extract_facts(allow_chunk_c.chunk_text)
+                    sorted_facts = sorted(facts, key=lambda f: f.normalized)
+                    fact_idx = self.rng.randint(0, len(sorted_facts) - 1)
+                    picked_fact = sorted_facts[fact_idx]
+                    negated = negate_fact(picked_fact)
+                    planted_contradiction = PlantedContradiction(
+                        kb_fact=picked_fact.normalized,
+                        negated_form=negated,
+                        fact_category=picked_fact.fact_category,
+                    )
+                    citations = KnowledgeCitations(
+                        should_cite=[allow_chunk_c.chunk_id], must_not_cite=deny_ids
+                    )
+                    kb_required = [allow_chunk_c.chunk_id]
+                else:
+                    # No fact-bearing chunk available — fall back rather than ship a groundless plan.
+                    citations = KnowledgeCitations(should_cite=[], must_not_cite=deny_ids)
+                    kb_required = []
+                multi_chunk = False
             else:
                 citations = KnowledgeCitations(should_cite=allow_ids[:1], must_not_cite=deny_ids)
                 kb_required = allow_ids[:1]
@@ -612,6 +662,7 @@ class QualityPlanInjector:
             directives = _prose_directive_for_accuracy(
                 label, should_cite_chunks, must_not_cite_chunks,
                 planted_constraint=planted_constraint,
+                planted_contradiction=planted_contradiction,
             )
             cat11_gate = (
                 "gate_1" if label.precision == "conditional_applied"
@@ -631,4 +682,5 @@ class QualityPlanInjector:
             multi_chunk_required=multi_chunk,
             kb_chunks_required=kb_required,
             planted_constraint=planted_constraint,
+            planted_contradiction=planted_contradiction,
         )
