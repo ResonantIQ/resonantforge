@@ -2,6 +2,7 @@
 
 import math
 import random
+from resonantforge.kb.constraint_extractor import extract_constraints
 from resonantforge.schemas import (
     ConstraintType, KBChunk, QualityPlan, RubricTarget, AccuracyLabel,
     KnowledgeCitations, SimEvent, SimEventType, DaySnapshot, LifecycleStage,
@@ -124,6 +125,7 @@ def _prose_directive_for_accuracy(
     label: AccuracyLabel,
     should_cite: list[KBChunk],
     must_not_cite: list[KBChunk],
+    planted_constraint: str | None = None,
 ) -> str:
     """
     Return a plain-English prose generation directive for the accuracy dimension.
@@ -132,6 +134,10 @@ def _prose_directive_for_accuracy(
     the KB; overgeneralized claims omit a key constraint; conditional_applied claims
     correctly apply a policy condition to the customer's context; exact claims mirror
     the KB faithfully.
+
+    For overgeneralized plans, ``planted_constraint`` names the specific constraint to
+    drop. This produces a controlled transformation (reliable) rather than an open-ended
+    generation directive (unreliable).
 
     Chunk text is embedded inline so the LLM has the actual policy content to
     ground its claims in — passing only chunk IDs produced zero-claim outputs.
@@ -144,10 +150,20 @@ def _prose_directive_for_accuracy(
         base += _render_chunk_blocks("KB policy content to contradict:", should_cite)
         return base
     if label.precision == "overgeneralized":
-        base = (
-            "Agent should make a claim that is technically supported by the KB but misses an important constraint. "
-            "For example, if the policy says 'refunds within 30 days for paid plans only', the agent says 'refunds are available'."
-        )
+        if planted_constraint:
+            base = (
+                f"Rewrite the agent's response using the KB policy content below, but REMOVE "
+                f"or OMIT this specific constraint: \"{planted_constraint}\"\n\n"
+                f"State the policy as if it applies universally — without that limit, condition, "
+                f"or restriction. Do not add new claims. Keep the rest of the response unchanged."
+            )
+        else:
+            base = (
+                "Agent should make a claim that is technically supported by the KB but "
+                "removes or omits any limiting, conditional, or qualifying language "
+                "(phrases like 'only', numeric limits, plan restrictions, date windows). "
+                "State the policy as if it applies universally without exceptions."
+            )
         base += _render_chunk_blocks("Relevant KB policy content:", should_cite)
         base += _render_chunk_blocks("Do not cite or mirror the following stale/adversarial content:", must_not_cite)
         return base
@@ -488,6 +504,7 @@ class QualityPlanInjector:
         multi_chunk: bool = False
         kb_required: list[str] = []
         coaching_dim: str
+        planted_constraint: str | None = None
 
         if spec["type"] == "control":
             rubric = ALL_CLEAN_TARGETS
@@ -533,6 +550,7 @@ class QualityPlanInjector:
 
         else:  # accuracy
             label: AccuracyLabel = spec["label"]
+            planted_constraint: str | None = None
             if label.status == "insufficient_information":
                 citations = KnowledgeCitations(should_cite=[], must_not_cite=["*"])
                 kb_required = []
@@ -543,6 +561,46 @@ class QualityPlanInjector:
                 citations = KnowledgeCitations(should_cite=combined, must_not_cite=[])
                 kb_required = combined
                 multi_chunk = True
+            elif label.precision == "overgeneralized":
+                # Pre-filter: only chunks with extractable constraints qualify.
+                # If the picked chunk has no constraints, retry up to 2 times;
+                # fall back to kb_required=[] rather than ship a constraint-free plan.
+                chunks_by_id = {c.chunk_id: c for c in kb_chunks}
+                allow_chunk = chunks_by_id.get(allow_ids[0]) if allow_ids else None
+
+                if allow_chunk is not None:
+                    constraints = extract_constraints(allow_chunk.chunk_text)
+                    if not constraints:
+                        # Retry from pick_pool_capped for up to 2 additional candidates
+                        if domain_aware:
+                            for _ in range(2):
+                                candidate = _pick_from(pick_pool_capped)
+                                if candidate is not None:
+                                    candidate_constraints = extract_constraints(candidate.chunk_text)
+                                    if candidate_constraints:
+                                        allow_chunk = candidate
+                                        constraints = candidate_constraints
+                                        allow_ids = [candidate.chunk_id]
+                                        break
+                            else:
+                                # All retries exhausted — fall back
+                                allow_chunk = None
+                                constraints = []
+                        else:
+                            allow_chunk = None
+                            constraints = []
+
+                if allow_chunk is not None and constraints:
+                    # Deterministic pick: use seeded RNG index into sorted constraint list
+                    sorted_constraints = sorted(constraints, key=lambda c: c.normalized)
+                    idx = self.rng.randint(0, len(sorted_constraints) - 1)
+                    planted_constraint = sorted_constraints[idx].normalized
+                    citations = KnowledgeCitations(should_cite=[allow_chunk.chunk_id], must_not_cite=deny_ids)
+                    kb_required = [allow_chunk.chunk_id]
+                else:
+                    citations = KnowledgeCitations(should_cite=[], must_not_cite=deny_ids)
+                    kb_required = []
+                multi_chunk = False
             else:
                 citations = KnowledgeCitations(should_cite=allow_ids[:1], must_not_cite=deny_ids)
                 kb_required = allow_ids[:1]
@@ -551,7 +609,10 @@ class QualityPlanInjector:
             chunks_by_id = {c.chunk_id: c for c in kb_chunks}
             should_cite_chunks = [chunks_by_id[cid] for cid in citations.should_cite if cid in chunks_by_id]
             must_not_cite_chunks = [chunks_by_id[cid] for cid in citations.must_not_cite if cid in chunks_by_id]
-            directives = _prose_directive_for_accuracy(label, should_cite_chunks, must_not_cite_chunks)
+            directives = _prose_directive_for_accuracy(
+                label, should_cite_chunks, must_not_cite_chunks,
+                planted_constraint=planted_constraint,
+            )
             cat11_gate = (
                 "gate_1" if label.precision == "conditional_applied"
                 else "gate_3" if label.precision == "overgeneralized"
@@ -569,4 +630,5 @@ class QualityPlanInjector:
             cat11_gate=cat11_gate,
             multi_chunk_required=multi_chunk,
             kb_chunks_required=kb_required,
+            planted_constraint=planted_constraint,
         )

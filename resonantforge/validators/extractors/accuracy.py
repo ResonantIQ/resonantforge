@@ -438,6 +438,7 @@ def run_kb_alignment_pipeline(
     kb_chunks_required: list[str],
     synonym_map: dict[str, str],
     top_k: int = 3,
+    planted_constraint: str | None = None,
 ) -> AccuracySignals:
     """
     Steps 2–8: Deterministic KB alignment pipeline.
@@ -463,6 +464,8 @@ def run_kb_alignment_pipeline(
         kb_chunks_required: planted ground-truth chunk IDs; defines the candidate pool.
         synonym_map: per-profile synonym mapping for text normalization.
         top_k: unused (retained for backward-compatible call sites).
+        planted_constraint: normalized constraint phrase for overgeneralization events;
+            when set, replaces the regex-based Step 5 with a direct substring presence check.
 
     Returns:
         AccuracySignals capturing the full pipeline verdict.
@@ -555,6 +558,18 @@ def run_kb_alignment_pipeline(
     else:
         aggregate_alignment = "not_found"
 
+    # Step 5 (override): planted-constraint deterministic check.
+    # When a planted_constraint is provided, replace the regex-based overgeneralization
+    # signal with a direct presence check: the constraint must appear (as a normalized
+    # substring) in at least one agent claim.  This closes the detection loop for
+    # cases the regex patterns miss (e.g. bare numerics like "10 seats").
+    if planted_constraint is not None:
+        pc_norm = " ".join(planted_constraint.lower().split())
+        overall_overgeneralization = not any(
+            pc_norm in " ".join(c.claim_text.lower().split())
+            for c in claims
+        )
+
     # Step 7: Multi-chunk satisfaction — all required chunks must appear in kb_chunks_used.
     multi_chunk_required = len(kb_chunks_required) > 1
     multi_chunk_satisfied = False
@@ -582,6 +597,7 @@ def extract_accuracy_signals(
     synonym_map: dict[str, str],
     anthropic_client: Anthropic | None = None,
     top_k: int = 3,
+    planted_constraint: str | None = None,
 ) -> AccuracySignals:
     """
     Full 8-step accuracy extraction pipeline entry point.
@@ -616,4 +632,5 @@ def extract_accuracy_signals(
         kb_chunks_required=kb_chunks_required,
         synonym_map=synonym_map,
         top_k=top_k,
+        planted_constraint=planted_constraint,
     )

@@ -310,6 +310,7 @@ def _make_conversation_record(
         trigger_event_id=conv_event.event_id,
         is_planted_quality=quality_plan is not None,
         tone_variant=None,
+        planted_constraint=quality_plan.planted_constraint if quality_plan is not None else None,
     )
 
 
@@ -829,6 +830,7 @@ def _generate_prose_for_chunk(
                     quality_plan.kb_chunks_required,
                     lexicons.synonym_map,
                     anthropic_client=anthropic_client,
+                    planted_constraint=quality_plan.planted_constraint,
                 )
             except ClaimExtractionError as exc:
                 _log(

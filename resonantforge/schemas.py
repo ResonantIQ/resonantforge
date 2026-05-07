@@ -137,6 +137,9 @@ class ConversationRecord(BaseModel):
     The ``prose`` field contains the full verbatim conversation text as
     produced by the prose generator. ``is_planted_quality`` flags conversations
     that were deliberately crafted to exercise a specific rubric target.
+    ``planted_constraint`` carries the specific constraint phrase planted for
+    overgeneralization events so the validator can do a deterministic presence
+    check instead of regex guessing.
     """
 
     conversation_id: str
@@ -150,6 +153,7 @@ class ConversationRecord(BaseModel):
     trigger_event_id: str
     is_planted_quality: bool = False
     tone_variant: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
+    planted_constraint: Optional[str] = None  # normalized constraint phrase for overgeneralization events
 
 
 class AccuracyLabel(BaseModel):
@@ -204,6 +208,9 @@ class QualityPlan(BaseModel):
     A QualityPlan is authored by the corpus planner and consumed by the prose
     generator. It specifies rubric targets, KB constraints, and the plain-English
     directives the generator must follow when producing conversation prose.
+    ``planted_constraint`` is set for overgeneralization plans: the specific
+    constraint phrase extracted from the KB chunk that the generator is instructed
+    to drop, enabling deterministic ground-truth validation.
     """
 
     conversation_id: str
@@ -215,6 +222,7 @@ class QualityPlan(BaseModel):
     cat11_gate: Optional[str] = None  # which Cat 11 gate this planted case tests
     multi_chunk_required: bool = False
     kb_chunks_required: list[str] = Field(default_factory=list)  # ground truth chunks
+    planted_constraint: Optional[str] = None  # normalized constraint phrase for overgeneralization events
 
 
 # ---------------------------------------------------------------------------
