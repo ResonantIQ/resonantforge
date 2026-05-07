@@ -152,17 +152,17 @@ def _prose_directive_for_accuracy(
     if label.status == "contradicted":
         if planted_contradiction is not None:
             base = (
-                f"Rewrite the agent's response to state the following claim as established fact:\n"
+                f"Rewrite the agent's response to state the following as confirmed company policy:\n"
                 f'"{planted_contradiction.negated_form}"\n\n'
-                f"The above claim directly contradicts the KB policy. State only the contradicting "
-                f"claim — do not quote the original policy alongside it."
+                f"Present this as an accurate statement of company policy. "
+                f"Do not mention any alternative policies, time periods, or exceptions."
             )
         else:
             base = (
                 "Agent should make a claim that directly contradicts the KB. "
                 "The claim should be specific and verifiable."
             )
-        base += _render_chunk_blocks("KB policy content to contradict:", should_cite)
+        base += _render_chunk_blocks("KB policy content (for context):", should_cite)
         return base
     if label.precision == "overgeneralized":
         if planted_constraint:
@@ -238,6 +238,11 @@ class QualityPlanInjector:
         self.rng = rng
         self.profile_name = profile_name
         self.validator = PlanValidator()
+        # Pool-starvation telemetry — accumulated during inject(), read by pipeline.
+        self.pool_starvation_count: int = 0
+        self.pool_starvation_events: list[dict] = []
+        self._pool_telemetry_observations: dict[str, list[dict]] = {}
+        self.pool_filter_telemetry: dict = {}
 
     def inject(
         self,
@@ -327,6 +332,21 @@ class QualityPlanInjector:
                     continue
 
             plans.append(plan)
+
+        # Compute aggregate pool_filter_telemetry from per-plan observations.
+        self.pool_filter_telemetry = {}
+        for label_key, observations in self._pool_telemetry_observations.items():
+            if not observations:
+                continue
+            initial_sizes = [o["initial_pool_size"] for o in observations]
+            fact_sizes = [o["fact_bearing_pool_size"] for o in observations]
+            self.pool_filter_telemetry[label_key] = {
+                "initial_pool_avg": sum(initial_sizes) / len(initial_sizes),
+                "after_contradiction_filter_avg": sum(fact_sizes) / len(fact_sizes),
+                "final_pool_avg": sum(fact_sizes) / len(fact_sizes),
+                "min_final_pool": min(fact_sizes),
+                "max_final_pool": max(fact_sizes),
+            }
 
         return plans
 
@@ -620,14 +640,32 @@ class QualityPlanInjector:
             elif label.status == "contradicted" and label.precision == "exact":
                 # Pre-filter: only chunks with extractable, contradictable facts qualify.
                 fact_bearing_pool = [c for c in pick_pool_capped if extract_facts(c.chunk_text)]
+                initial_pool_size = len(pick_pool_capped)
+                fact_pool_size = len(fact_bearing_pool)
 
                 # Pool instrumentation: warn when diversity is too low for reliable seeding.
-                if len(fact_bearing_pool) < 3:
+                if fact_pool_size < 3:
                     _logger.warning(
                         "pool_starvation: fact-bearing pool=%d < 3 for contradicted:exact event_id=%s",
-                        len(fact_bearing_pool),
+                        fact_pool_size,
                         conv_event.event_id,
                     )
+                    self.pool_starvation_count += 1
+                    self.pool_starvation_events.append({
+                        "event_id": conv_event.event_id,
+                        "plan_type": "contradicted:exact",
+                        "filter_stage": "fact_bearing",
+                        "pool_size_at_failure": fact_pool_size,
+                    })
+
+                # Record per-plan observation for aggregate telemetry.
+                label_key = "contradicted:exact"
+                if label_key not in self._pool_telemetry_observations:
+                    self._pool_telemetry_observations[label_key] = []
+                self._pool_telemetry_observations[label_key].append({
+                    "initial_pool_size": initial_pool_size,
+                    "fact_bearing_pool_size": fact_pool_size,
+                })
 
                 allow_chunk_c: KBChunk | None = _pick_from(fact_bearing_pool)
 

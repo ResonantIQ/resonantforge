@@ -359,3 +359,32 @@ def test_validator_fallback_when_no_planted_contradiction():
         planted_contradiction=None,
     )
     assert signals.contradicted_flag is False
+
+
+def test_directive_for_contradicted_plan_does_not_contain_contradiction_hint():
+    """
+    The prose_generation_directives for a contradicted:exact plan must NOT contain
+    the word 'contradict' in any form. Exposing the meta-label to the LLM causes
+    meta-commentary (acknowledging both the real policy and the planted claim), which
+    sets kb_fact_present=True → contradicted_flag=False → validation FAIL.
+    """
+    rng = random.Random(42)
+    injector = QualityPlanInjector(rng=rng)
+    events = [_make_conv_event(f"evt_{i:03d}") for i in range(80)]
+    chunks = [FACT_CHUNK, NUMERIC_CHUNK, VAGUE_CHUNK]
+    plans = injector.inject(events=events, snapshots=[], kb_chunks=chunks, planted_count=50)
+
+    candidates = [
+        p for p in plans
+        if p.rubric_targets.accuracy
+        and p.rubric_targets.accuracy.status == "contradicted"
+        and p.rubric_targets.accuracy.precision == "exact"
+        and p.planted_contradiction is not None
+    ]
+    assert candidates, "Need at least one contradicted:exact plan with planted_contradiction"
+
+    for plan in candidates:
+        assert "contradict" not in plan.prose_generation_directives.lower(), (
+            f"prose_generation_directives contains 'contradict' — this cues LLM meta-commentary.\n"
+            f"Directive excerpt: {plan.prose_generation_directives[:300]!r}"
+        )

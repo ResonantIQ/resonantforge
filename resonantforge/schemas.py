@@ -779,6 +779,10 @@ class Manifest(BaseModel):
     cells_requiring_backfill: list[str] = Field(default_factory=list)
     cells_satisfied_by_normal: list[str] = Field(default_factory=list)
     deficit_at_run_end: dict[str, int] = Field(default_factory=dict)
+    # RFORGE-8: pool-starvation telemetry — populated by QualityPlanInjector
+    pool_starvation_count: int = 0
+    pool_starvation_events: list[dict[str, Any]] = Field(default_factory=list)
+    pool_filter_telemetry: dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

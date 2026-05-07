@@ -1072,6 +1072,12 @@ def _run_pipeline_inner(
         kb_chunks=kb_chunks,
     )
     _log(config, f"  {len(quality_plans)} quality plans injected")
+    if injector.pool_starvation_count:
+        _log(
+            config,
+            f"  pool_starvation: {injector.pool_starvation_count} incident(s) "
+            f"across {len(injector.pool_starvation_events)} contradicted:exact plan(s)",
+        )
 
     # ==================================================================
     # Phase 2 — Corpus-config artifacts (deterministic, no LLM)
@@ -1452,6 +1458,9 @@ def _run_pipeline_inner(
         cells_requiring_backfill=backfill.get_cells_requiring_backfill(),
         cells_satisfied_by_normal=backfill.get_cells_satisfied_by_normal(),
         deficit_at_run_end=backfill.get_deficit_at_run_end(),
+        pool_starvation_count=injector.pool_starvation_count,
+        pool_starvation_events=injector.pool_starvation_events,
+        pool_filter_telemetry=injector.pool_filter_telemetry,
     )
 
     manifest_path = profile_dir / "manifest.json"
