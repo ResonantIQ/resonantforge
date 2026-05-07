@@ -477,7 +477,7 @@ def test_rerouted_control_plan_gets_conditional_applied_directive():
             f"directive was not regenerated after reroute.\n"
             f"Got: {plan.prose_generation_directives[:200]!r}"
         )
-        assert "correctly apply the conditional" in plan.prose_generation_directives, (
+        assert "IS entitled" in plan.prose_generation_directives, (
             f"Rerouted control plan {plan.conversation_id} directive missing conditional_applied "
             f"instruction.\nGot: {plan.prose_generation_directives[:200]!r}"
         )

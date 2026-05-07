@@ -184,8 +184,15 @@ def _prose_directive_for_accuracy(
         return base
     if label.precision == "conditional_applied":
         base = (
-            "Agent should correctly apply the conditional from the KB to the customer's context. "
-            "The customer's situation triggers a condition in the policy; the agent must recognize and apply it."
+            "Identify which condition in the KB policy below applies to this customer's "
+            "specific situation (plan type, eligibility window, account status, etc.). "
+            "State what the customer IS entitled to under that condition using affirmative language.\n\n"
+            "Requirements:\n"
+            "- Lead with the positive entitlement: "
+            "\"For [plan/condition], you receive...\" or \"[Condition] customers are eligible for...\"\n"
+            "- Include the qualifying condition explicitly as a scope marker\n"
+            "- Do NOT use negating framing (\"we don't offer\", \"you cannot\", \"not available\") — "
+            "state the applicable alternative affirmatively instead"
         )
         base += _render_chunk_blocks("Relevant KB policy content:", should_cite)
         return base
