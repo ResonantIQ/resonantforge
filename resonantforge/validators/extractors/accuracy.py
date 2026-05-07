@@ -528,7 +528,12 @@ def run_kb_alignment_pipeline(
             alignment = result["alignment"]
 
             # Step 5: Overgeneralization — chunk has constraints the claim drops.
-            if alignment == "supported" and not result["constraint_preserved"]:
+            # _check_chunk_relevance returns alignment="partial" when constraint_preserved=False,
+            # so the original "alignment == 'supported'" gate was dead code (never reachable).
+            # The "alignment != 'contradicted'" guard prevents DENY_CONDITION chunks from being
+            # double-counted: those already return constraint_preserved=False via the contradicted
+            # path and are handled as contradictions, not overgeneralizations.
+            if not result["constraint_preserved"] and alignment != "contradicted":
                 alignment = "partial"
                 overall_overgeneralization = True
 
