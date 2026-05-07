@@ -562,10 +562,13 @@ class QualityPlanInjector:
         if spec["type"] == "control":
             rubric = ALL_CLEAN_TARGETS
             citations = KnowledgeCitations(should_cite=allow_ids[:1], must_not_cite=[])
-            directives = (
+            _ctrl_preamble = (
                 "Write a model customer service interaction. Agent should be empathetic, resolve the issue completely, "
                 "write on-brand, and make accurate claims supported by the knowledge base."
             )
+            _ctrl_chunk_map = {c.chunk_id: c for c in kb_chunks}
+            _ctrl_chunks = [_ctrl_chunk_map[x] for x in allow_ids[:1] if x in _ctrl_chunk_map]
+            directives = _ctrl_preamble + _render_chunk_blocks("Relevant KB policy content:", _ctrl_chunks)
             cat11_gate = None
             multi_chunk = False
             kb_required = allow_ids[:1]
