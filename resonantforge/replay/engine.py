@@ -208,7 +208,9 @@ def replay_one(envelope: ReplayEnvelope, labels: ReplayLabels) -> ReplayResult:
         contraction_patterns=lex.contraction_patterns,
     )
 
-    # 4. Accuracy — inject frozen extracted_claims, bypass extract_claims_llm entirely
+    # 4. Accuracy — inject frozen extracted_claims, bypass extract_claims_llm entirely.
+    # planted_constraint and planted_contradiction are forwarded from the quality_plan
+    # so the closed-loop detection paths fire correctly during replay.
     frozen_claims: list[Claim] = envelope.validator_inputs.accuracy.extracted_claims
     accuracy_signals = run_kb_alignment_pipeline(
         claims=frozen_claims,
@@ -216,6 +218,10 @@ def replay_one(envelope: ReplayEnvelope, labels: ReplayLabels) -> ReplayResult:
         conversation_context=envelope.customer_prose,
         kb_chunks_required=plan.kb_chunks_required,
         synonym_map=lex.synonym_map,
+        planted_constraint=plan.planted_constraint,
+        planted_contradiction=(
+            plan.planted_contradiction.model_dump() if plan.planted_contradiction else None
+        ),
     )
 
     # 5. Rule engine — validate all dimensions with targets from frozen quality plan

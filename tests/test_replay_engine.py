@@ -270,3 +270,78 @@ class TestReplayOne:
         assert [(v.dimension, str(v.verdict)) for v in r1.dimension_verdicts] == [
             (v.dimension, str(v.verdict)) for v in r2.dimension_verdicts
         ]
+
+
+# ---------------------------------------------------------------------------
+# replay_one — planted metadata forwarding (RFORGE-32)
+# ---------------------------------------------------------------------------
+
+
+class TestReplayOnePlantedMetadata:
+    """
+    Verify that replay_one forwards planted_constraint and planted_contradiction
+    from the quality_plan into run_kb_alignment_pipeline.
+
+    Before the fix the engine called run_kb_alignment_pipeline without those
+    kwargs, so:
+      - overgeneralization_flag stayed False for planted_constraint convs
+        (the standard loop only sets it when incoming alignment=="supported",
+        but _check_chunk_relevance already returns "partial" when a constraint
+        is missing → the flag is never set via the standard path).
+      - contradicted_flag stayed False for planted_contradiction convs
+        (the chunk is allow_condition, not DENY_CONDITION, so standard
+        alignment is "supported" not "contradicted").
+
+    Both cases produced false-FAIL on supported:overgeneralized and
+    contradicted:exact targets respectively.
+    """
+
+    def _run(self, fixtures_dir: Path, conv_id: str) -> "ReplayResult":
+        env = load_envelope(fixtures_dir / conv_id / "envelope.json")
+        lbl = load_labels(fixtures_dir / conv_id / "labels.json", conv_id=conv_id)
+        return replay_one(env, lbl)
+
+    def test_planted_constraint_accuracy_verdict_is_pass(self, fixtures_dir: Path) -> None:
+        """
+        Engine must forward planted_constraint into run_kb_alignment_pipeline.
+
+        Without the fix: overgeneralization_flag=False → supported:overgeneralized → FAIL.
+        With the fix: planted substring check fires → overgeneralization_flag=True → PASS.
+        """
+        result = self._run(fixtures_dir, "conv_planted_constraint")
+        acc_verdicts = [v for v in result.dimension_verdicts if v.dimension == "accuracy"]
+        assert len(acc_verdicts) == 1, f"Expected 1 accuracy verdict, got {len(acc_verdicts)}"
+        assert acc_verdicts[0].verdict == ValidationVerdict.PASS, (
+            f"Expected accuracy PASS for planted_constraint conv, got {acc_verdicts[0].verdict}. "
+            f"signals: {acc_verdicts[0].signals_summary}"
+        )
+
+    def test_planted_contradiction_accuracy_verdict_is_pass(self, fixtures_dir: Path) -> None:
+        """
+        Engine must forward planted_contradiction into run_kb_alignment_pipeline.
+
+        Without the fix: contradicted_flag=False, alignment="supported" →
+        contradicted:exact → FAIL.
+        With the fix: closed-loop check → contradicted_flag=True → PASS.
+        """
+        result = self._run(fixtures_dir, "conv_planted_contradiction")
+        acc_verdicts = [v for v in result.dimension_verdicts if v.dimension == "accuracy"]
+        assert len(acc_verdicts) == 1, f"Expected 1 accuracy verdict, got {len(acc_verdicts)}"
+        assert acc_verdicts[0].verdict == ValidationVerdict.PASS, (
+            f"Expected accuracy PASS for planted_contradiction conv, got {acc_verdicts[0].verdict}. "
+            f"signals: {acc_verdicts[0].signals_summary}"
+        )
+
+    def test_non_planted_envelope_behavior_unchanged(self, fixtures_dir: Path) -> None:
+        """
+        Forwarding None for both kwargs must not change behavior for non-planted convs.
+
+        Regression guard: conv_accuracy_fail must still produce accuracy FAIL after the fix.
+        """
+        result = self._run(fixtures_dir, "conv_accuracy_fail")
+        acc_verdicts = [v for v in result.dimension_verdicts if v.dimension == "accuracy"]
+        assert len(acc_verdicts) == 1
+        assert acc_verdicts[0].verdict == ValidationVerdict.FAIL, (
+            f"Non-planted accuracy_fail conv should still FAIL after fix, "
+            f"got {acc_verdicts[0].verdict}"
+        )

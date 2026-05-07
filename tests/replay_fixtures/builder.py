@@ -162,8 +162,10 @@ def _quality_plan(
     conv_id: str,
     rubric_targets: dict,
     kb_chunks_required: list | None = None,
+    planted_constraint: str | None = None,
+    planted_contradiction: dict | None = None,
 ) -> dict:
-    return {
+    plan: dict = {
         "conversation_id": conv_id,
         "trigger_event_id": f"evt_{conv_id}",
         "rubric_targets": rubric_targets,
@@ -173,6 +175,11 @@ def _quality_plan(
         "multi_chunk_required": False,
         "kb_chunks_required": kb_chunks_required or [],
     }
+    if planted_constraint is not None:
+        plan["planted_constraint"] = planted_constraint
+    if planted_contradiction is not None:
+        plan["planted_contradiction"] = planted_contradiction
+    return plan
 
 
 def _labels(
@@ -411,6 +418,162 @@ def _fixture_brand_voice_fail() -> tuple[dict, dict]:
 
 
 # ---------------------------------------------------------------------------
+# Fixture 6: conv_planted_constraint
+# planted_constraint="up to 5" — agent dropped the seat limit in their claim.
+#
+# The standard regex-based overgeneralization check (Step 5) detects that the
+# chunk has an "up to 5" constraint but the claim omits it, and returns
+# alignment="partial" from _check_chunk_relevance.  However, the main loop in
+# run_kb_alignment_pipeline only sets overgeneralization_flag=True when the
+# INCOMING alignment value is "supported" (not "partial"), so the flag stays
+# False via the standard path.
+#
+# Without the engine forwarding planted_constraint → overgeneralization_flag=False
+# → target supported:overgeneralized → FAIL (false-negative).
+# With the fix → direct substring check fires → overgeneralization_flag=True
+# → PASS.
+# ---------------------------------------------------------------------------
+
+_KB_CHUNK_SEAT_LIMIT = {
+    "chunk_id": "kb_workspace_members_v1",
+    "document_id": "doc_workspace",
+    "document_path": "policies/workspace_policy.md",
+    "chunk_text": "Teams can add up to 5 members to a shared workspace.",
+    "constraint_type": "allow_condition",
+    "cat11_gate": None,
+    "tone_variant": None,
+    "domains": ["workspace"],
+    "intent_tags": [],
+    "adversarial": False,
+    "sanity_probe": False,
+    "claims": {},
+    "metadata": {},
+}
+
+# Claim drops "up to 5" — says "unlimited members" instead.
+_OVERGENERALIZED_CLAIM = {
+    "claim_text": "Teams can add unlimited members to a shared workspace.",
+    "claim_span": [0, 53],
+    "claim_type": "policy",
+    "normalized_subject": "teams",
+    "normalized_predicate": "can add",
+    "normalized_object": "members workspace",
+    "alignment": None,
+}
+
+
+def _fixture_planted_constraint() -> tuple[dict, dict]:
+    conv_id = "conv_planted_constraint"
+    agent_prose = "Teams can add unlimited members to a shared workspace."
+    customer_prose = "How many team members can I add to a workspace?"
+
+    plan = _quality_plan(
+        conv_id,
+        rubric_targets={"accuracy": {"status": "supported", "precision": "overgeneralized"}},
+        kb_chunks_required=["kb_workspace_members_v1"],
+        planted_constraint="up to 5",
+    )
+
+    def _env(cid: str) -> dict:
+        base = _envelope(cid, agent_prose, customer_prose, plan, [_OVERGENERALIZED_CLAIM])
+        base["kb_chunks"] = [_KB_CHUNK_SEAT_LIMIT]
+        return base
+
+    env = _env(conv_id)
+    lbl = _labels(
+        conv_id,
+        expected_outcome="pass",
+        expected_failures={},
+        confidence="high",
+        tags=["planted"],
+        rationale=(
+            "Agent dropped 'up to 5' constraint — said 'unlimited members' instead. "
+            "planted_constraint='up to 5' triggers the closed-loop substring check, "
+            "setting overgeneralization_flag=True → supported:overgeneralized PASS."
+        ),
+    )
+    return env, lbl
+
+
+# ---------------------------------------------------------------------------
+# Fixture 7: conv_planted_contradiction
+# planted_contradiction — agent stated the negated form (0.1%) instead of the
+# real KB fact (99.9%).
+#
+# The chunk is an allow_condition (not DENY_CONDITION) so _check_chunk_relevance
+# will NOT return alignment="contradicted" via the negation pattern path.  The
+# claim is topically relevant and alignment resolves to "supported".  Without
+# planted_contradiction forwarded, contradicted_flag stays False and
+# passed = (alignment == "contradicted") = False → FAIL.
+# With the fix → contradicted_flag=True → PASS.
+# ---------------------------------------------------------------------------
+
+_KB_CHUNK_UPTIME = {
+    "chunk_id": "kb_sla_uptime_v1",
+    "document_id": "doc_sla",
+    "document_path": "policies/sla_policy.md",
+    "chunk_text": "Our platform maintains 99.9% uptime as guaranteed by our SLA.",
+    "constraint_type": "allow_condition",
+    "cat11_gate": None,
+    "tone_variant": None,
+    "domains": ["sla"],
+    "intent_tags": [],
+    "adversarial": False,
+    "sanity_probe": False,
+    "claims": {},
+    "metadata": {},
+}
+
+# Agent stated "0.1%" (the negated form) instead of "99.9%" (the KB fact).
+_CONTRADICTED_CLAIM = {
+    "claim_text": "Our platform uptime is 0.1% as per our SLA.",
+    "claim_span": [0, 43],
+    "claim_type": "policy",
+    "normalized_subject": "platform",
+    "normalized_predicate": "is",
+    "normalized_object": "uptime sla",
+    "alignment": None,
+}
+
+
+def _fixture_planted_contradiction() -> tuple[dict, dict]:
+    conv_id = "conv_planted_contradiction"
+    agent_prose = "Our platform uptime is 0.1% as per our SLA."
+    customer_prose = "What uptime does your SLA guarantee?"
+
+    plan = _quality_plan(
+        conv_id,
+        rubric_targets={"accuracy": {"status": "contradicted", "precision": "exact"}},
+        kb_chunks_required=["kb_sla_uptime_v1"],
+        planted_contradiction={
+            "kb_fact": "99.9",
+            "negated_form": "0.1",
+            "fact_category": "numeric",
+        },
+    )
+
+    def _env(cid: str) -> dict:
+        base = _envelope(cid, agent_prose, customer_prose, plan, [_CONTRADICTED_CLAIM])
+        base["kb_chunks"] = [_KB_CHUNK_UPTIME]
+        return base
+
+    env = _env(conv_id)
+    lbl = _labels(
+        conv_id,
+        expected_outcome="pass",
+        expected_failures={},
+        confidence="high",
+        tags=["planted"],
+        rationale=(
+            "Agent stated '0.1%' (negated_form) instead of '99.9%' (kb_fact). "
+            "planted_contradiction closed-loop check: negated_form present and kb_fact absent "
+            "→ contradicted_flag=True → contradicted:exact PASS."
+        ),
+    )
+    return env, lbl
+
+
+# ---------------------------------------------------------------------------
 # Builder entry point
 # ---------------------------------------------------------------------------
 
@@ -420,6 +583,8 @@ FIXTURES = {
     "conv_claim_extraction": _fixture_claim_extraction,
     "conv_empathy_fail": _fixture_empathy_fail,
     "conv_brand_voice_fail": _fixture_brand_voice_fail,
+    "conv_planted_constraint": _fixture_planted_constraint,
+    "conv_planted_contradiction": _fixture_planted_contradiction,
 }
 
 
