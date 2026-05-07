@@ -195,6 +195,18 @@ class PlanValidator:
                 "quality plan has should_cite but kb_chunks_required is empty"
             )
 
+        # Check 4: overgeneralized and contradicted:exact plans require a KB chunk to be
+        # meaningful. Without one (pool starvation fallback) the LLM has no policy content
+        # to work from and will exhaust all retries — fail-fast here instead (RFORGE-36).
+        if quality_plan.rubric_targets.accuracy is not None and not quality_plan.kb_chunks_required:
+            _prec = quality_plan.rubric_targets.accuracy.precision
+            _stat = quality_plan.rubric_targets.accuracy.status
+            if _prec == "overgeneralized" or (_stat == "contradicted" and _prec == "exact"):
+                errors.append(
+                    f"degenerate plan: precision={_stat}:{_prec} requires kb_chunks_required "
+                    f"but it is empty (likely pool starvation)"
+                )
+
         if errors:
             return ValidationResult(
                 conversation_id=quality_plan.conversation_id,
