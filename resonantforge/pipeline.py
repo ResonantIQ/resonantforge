@@ -1078,6 +1078,12 @@ def _run_pipeline_inner(
             f"  pool_starvation: {injector.pool_starvation_count} incident(s) "
             f"across {len(injector.pool_starvation_events)} contradicted:exact plan(s)",
         )
+    if injector.conditional_reroute_count:
+        _log(
+            config,
+            f"  conditional_reroute: {injector.conditional_reroute_count} :exact plan(s) "
+            f"rerouted to :conditional_applied (RFORGE-10)",
+        )
 
     # ==================================================================
     # Phase 2 — Corpus-config artifacts (deterministic, no LLM)
@@ -1461,6 +1467,8 @@ def _run_pipeline_inner(
         pool_starvation_count=injector.pool_starvation_count,
         pool_starvation_events=injector.pool_starvation_events,
         pool_filter_telemetry=injector.pool_filter_telemetry,
+        conditional_reroute_count=injector.conditional_reroute_count,
+        conditional_reroute_events=injector.conditional_reroute_events,
     )
 
     manifest_path = profile_dir / "manifest.json"

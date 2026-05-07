@@ -783,6 +783,9 @@ class Manifest(BaseModel):
     pool_starvation_count: int = 0
     pool_starvation_events: list[dict[str, Any]] = Field(default_factory=list)
     pool_filter_telemetry: dict[str, Any] = Field(default_factory=dict)
+    # RFORGE-10: conditional-reroute telemetry — :exact swapped to :conditional_applied
+    conditional_reroute_count: int = 0
+    conditional_reroute_events: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

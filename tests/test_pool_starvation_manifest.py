@@ -46,7 +46,7 @@ def _make_chunk(chunk_id: str, chunk_text: str, domain: str = "billing") -> KBCh
         document_id=f"doc_{chunk_id}",
         document_path=f"policies/{chunk_id}.md",
         chunk_text=chunk_text,
-        constraint_type=ConstraintType.ALLOW_CONDITION,
+        constraint_type=ConstraintType.INFORMATIONAL,
         domains=[domain],
     )
 

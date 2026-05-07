@@ -28,6 +28,7 @@ import pytest
 from resonantforge.pipeline import PipelineConfig, run_pipeline
 from resonantforge.schemas import (
     ConversationRecord,
+    ConstraintType,
     DimensionVerdict,
     DisagreementRecord,
     GateSeverity,
@@ -42,6 +43,7 @@ from resonantforge.schemas import (
     ValidationVerdict,
 )
 from resonantforge.layer1.plan_validator import SkipRateTracker
+from resonantforge.layer1.quality_plan_injector import is_conditional_chunk
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -3089,3 +3091,137 @@ def test_quality_plan_conv_id_matches_pipeline_naming() -> None:
             f"pipeline naming convention f'conv_{{event_id}}'={expected_conv_id!r}. "
             "This breaks extractor quality-plan matching."
         )
+
+
+# ---------------------------------------------------------------------------
+# Group 17 — Conditional reroute (RFORGE-10, assertions 38–40)
+# ---------------------------------------------------------------------------
+
+
+def test_no_exact_plan_paired_with_conditional_chunk(corpus: tuple[Path, Manifest]) -> None:
+    """
+    Assertion 38 — For any generated quality plan, if any kb_chunks_required member
+    has constraint_type in {ALLOW_CONDITION, DENY_CONDITION}, accuracy_precision must
+    not be 'exact'.
+
+    Conditional chunks have branching structure that an :exact plan cannot honor —
+    the agent applies one branch correctly, the validator finds the full conditional
+    unreproduced, returns alignment='partial', FAIL. RFORGE-10 reroutes these to
+    :conditional_applied at plan-generation time.
+    """
+    profile_dir, _ = corpus
+
+    kb_chunks_path = profile_dir / "kb_chunks.jsonl"
+    if not kb_chunks_path.exists():
+        pytest.skip("kb_chunks.jsonl not found — KB generation may have been skipped")
+
+    kb_lookup = {
+        c.chunk_id: c
+        for c in (KBChunk(**r) for r in _read_jsonl(kb_chunks_path))
+    }
+
+    plans_path = profile_dir / "planted_quality.jsonl"
+    if not plans_path.exists():
+        pytest.skip("planted_quality.jsonl not found")
+
+    plans = [QualityPlan(**r) for r in _read_jsonl(plans_path)]
+    _CONDITIONAL_TYPES = {ConstraintType.ALLOW_CONDITION, ConstraintType.DENY_CONDITION}
+
+    violations = []
+    for plan in plans:
+        if not plan.rubric_targets.accuracy:
+            continue
+        if plan.rubric_targets.accuracy.precision != "exact":
+            continue
+        for cid in plan.kb_chunks_required:
+            chunk = kb_lookup.get(cid)
+            if chunk and chunk.constraint_type in _CONDITIONAL_TYPES:
+                violations.append(
+                    f"plan={plan.conversation_id} precision=exact "
+                    f"chunk={cid} constraint_type={chunk.constraint_type}"
+                )
+
+    assert violations == [], (
+        "Assertion 38 — Found :exact plans paired with conditional chunks (RFORGE-10 reroute failed):\n"
+        + "\n".join(violations)
+    )
+
+
+def test_no_contradicted_exact_plan_paired_with_conditional_chunk(
+    corpus: tuple[Path, Manifest],
+) -> None:
+    """
+    Assertion 39 — No contradicted:exact plan may be paired with a conditional chunk.
+
+    The contradicted:exact pick_pool_capped filter (RFORGE-10) must exclude
+    ALLOW_CONDITION and DENY_CONDITION chunks before the fact-bearing pre-filter.
+    Violating this produces unsatisfiable negation plans.
+    """
+    profile_dir, _ = corpus
+
+    kb_chunks_path = profile_dir / "kb_chunks.jsonl"
+    if not kb_chunks_path.exists():
+        pytest.skip("kb_chunks.jsonl not found")
+
+    kb_lookup = {
+        c.chunk_id: c
+        for c in (KBChunk(**r) for r in _read_jsonl(kb_chunks_path))
+    }
+
+    plans_path = profile_dir / "planted_quality.jsonl"
+    if not plans_path.exists():
+        pytest.skip("planted_quality.jsonl not found")
+
+    plans = [QualityPlan(**r) for r in _read_jsonl(plans_path)]
+    _CONDITIONAL_TYPES = {ConstraintType.ALLOW_CONDITION, ConstraintType.DENY_CONDITION}
+
+    violations = []
+    for plan in plans:
+        if not plan.rubric_targets.accuracy:
+            continue
+        acc = plan.rubric_targets.accuracy
+        if not (acc.status == "contradicted" and acc.precision == "exact"):
+            continue
+        for cid in plan.kb_chunks_required:
+            chunk = kb_lookup.get(cid)
+            if chunk and chunk.constraint_type in _CONDITIONAL_TYPES:
+                violations.append(
+                    f"plan={plan.conversation_id} contradicted:exact "
+                    f"chunk={cid} constraint_type={chunk.constraint_type}"
+                )
+
+    assert violations == [], (
+        "Assertion 39 — Found contradicted:exact plans with conditional chunks "
+        "(RFORGE-10 pool filter failed):\n" + "\n".join(violations)
+    )
+
+
+def test_manifest_conditional_reroute_fields_present(corpus: tuple[Path, Manifest]) -> None:
+    """
+    Assertion 40 — manifest.conditional_reroute_count and manifest.conditional_reroute_events
+    must be present and type-correct after a pipeline run.
+
+    These fields are produced by QualityPlanInjector and forwarded to the manifest in
+    Phase 5. Their presence confirms the RFORGE-10 telemetry wiring is complete.
+    """
+    _, manifest = corpus
+
+    assert hasattr(manifest, "conditional_reroute_count"), (
+        "Assertion 40 — Manifest missing 'conditional_reroute_count' field (RFORGE-10 telemetry)"
+    )
+    assert hasattr(manifest, "conditional_reroute_events"), (
+        "Assertion 40 — Manifest missing 'conditional_reroute_events' field (RFORGE-10 telemetry)"
+    )
+    assert isinstance(manifest.conditional_reroute_count, int), (
+        f"conditional_reroute_count must be int, got {type(manifest.conditional_reroute_count)}"
+    )
+    assert isinstance(manifest.conditional_reroute_events, list), (
+        f"conditional_reroute_events must be list, got {type(manifest.conditional_reroute_events)}"
+    )
+    assert manifest.conditional_reroute_count >= 0, (
+        f"conditional_reroute_count must be non-negative, got {manifest.conditional_reroute_count}"
+    )
+    assert len(manifest.conditional_reroute_events) == manifest.conditional_reroute_count, (
+        f"conditional_reroute_events length {len(manifest.conditional_reroute_events)} "
+        f"!= conditional_reroute_count {manifest.conditional_reroute_count}"
+    )

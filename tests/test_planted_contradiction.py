@@ -57,7 +57,7 @@ def _make_chunk(
     chunk_id: str,
     chunk_text: str,
     domain: str = "billing",
-    constraint_type: ConstraintType = ConstraintType.ALLOW_CONDITION,
+    constraint_type: ConstraintType = ConstraintType.INFORMATIONAL,
 ) -> KBChunk:
     return KBChunk(
         chunk_id=chunk_id,

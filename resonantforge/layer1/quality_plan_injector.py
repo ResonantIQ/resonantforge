@@ -196,6 +196,18 @@ def _prose_directive_for_accuracy(
     return base
 
 
+def is_conditional_chunk(chunk: KBChunk) -> bool:
+    """
+    Return True when the chunk has conditional structure ineligible for :exact precision.
+
+    ALLOW_CONDITION and DENY_CONDITION chunks have branching or qualifying clauses
+    (e.g. "monthly plans get X, annual plans get Y"). An agent answering correctly
+    applies the relevant branch, but cannot recite the full conditional verbatim —
+    so :exact is unsatisfiable. Use :conditional_applied instead (RFORGE-10).
+    """
+    return chunk.constraint_type in {ConstraintType.ALLOW_CONDITION, ConstraintType.DENY_CONDITION}
+
+
 def _chunk_satisfies_intent(chunk: KBChunk, event_intent: list[str]) -> bool:
     """
     Return True when the chunk's topic is plausibly covered by the event's intent.
@@ -243,6 +255,9 @@ class QualityPlanInjector:
         self.pool_starvation_events: list[dict] = []
         self._pool_telemetry_observations: dict[str, list[dict]] = {}
         self.pool_filter_telemetry: dict = {}
+        # Conditional-reroute telemetry (RFORGE-10) — :exact swapped to :conditional_applied.
+        self.conditional_reroute_count: int = 0
+        self.conditional_reroute_events: list[str] = []
 
     def inject(
         self,
@@ -340,12 +355,14 @@ class QualityPlanInjector:
                 continue
             initial_sizes = [o["initial_pool_size"] for o in observations]
             fact_sizes = [o["fact_bearing_pool_size"] for o in observations]
+            conditional_excluded_counts = [o.get("conditional_excluded", 0) for o in observations]
             self.pool_filter_telemetry[label_key] = {
                 "initial_pool_avg": sum(initial_sizes) / len(initial_sizes),
                 "after_contradiction_filter_avg": sum(fact_sizes) / len(fact_sizes),
                 "final_pool_avg": sum(fact_sizes) / len(fact_sizes),
                 "min_final_pool": min(fact_sizes),
                 "max_final_pool": max(fact_sizes),
+                "conditional_excluded_count": sum(conditional_excluded_counts),
             }
 
         return plans
@@ -639,7 +656,12 @@ class QualityPlanInjector:
                 multi_chunk = False
             elif label.status == "contradicted" and label.precision == "exact":
                 # Pre-filter: only chunks with extractable, contradictable facts qualify.
-                fact_bearing_pool = [c for c in pick_pool_capped if extract_facts(c.chunk_text)]
+                # RFORGE-10: also exclude conditional chunks — negating a branch of a conditional
+                # produces unsatisfiable plans. The reroute path for conditional+exact only covers
+                # supported plans; contradicted:exact keeps its own dedicated pool filter here.
+                non_conditional_pool = [c for c in pick_pool_capped if not is_conditional_chunk(c)]
+                conditional_excluded = len(pick_pool_capped) - len(non_conditional_pool)
+                fact_bearing_pool = [c for c in non_conditional_pool if extract_facts(c.chunk_text)]
                 initial_pool_size = len(pick_pool_capped)
                 fact_pool_size = len(fact_bearing_pool)
 
@@ -665,6 +687,7 @@ class QualityPlanInjector:
                 self._pool_telemetry_observations[label_key].append({
                     "initial_pool_size": initial_pool_size,
                     "fact_bearing_pool_size": fact_pool_size,
+                    "conditional_excluded": conditional_excluded,
                 })
 
                 allow_chunk_c: KBChunk | None = _pick_from(fact_bearing_pool)
@@ -708,6 +731,31 @@ class QualityPlanInjector:
                 else None
             )
             coaching_dim = "accuracy"
+
+        # RFORGE-10: reroute :exact → :conditional_applied for any plan paired with a
+        # conditional chunk. Applies to all spec types including control plans (which
+        # hardcode accuracy=supported:exact via ALL_CLEAN_TARGETS).
+        if (
+            rubric.accuracy is not None
+            and rubric.accuracy.precision == "exact"
+            and kb_required
+        ):
+            _rc = next((c for c in kb_chunks if c.chunk_id == kb_required[0]), None)
+            if _rc is not None and is_conditional_chunk(_rc):
+                _new_acc = AccuracyLabel(status=rubric.accuracy.status, precision="conditional_applied")
+                rubric = rubric.model_copy(update={"accuracy": _new_acc})
+                if spec["type"] == "accuracy":
+                    # Re-generate directives to reflect the rerouted precision.
+                    _cbi = {c.chunk_id: c for c in kb_chunks}
+                    _sc = [_cbi[x] for x in citations.should_cite if x in _cbi]
+                    _mnc = [_cbi[x] for x in citations.must_not_cite if x in _cbi]
+                    directives = _prose_directive_for_accuracy(
+                        _new_acc, _sc, _mnc,
+                        planted_constraint=planted_constraint,
+                        planted_contradiction=planted_contradiction,
+                    )
+                self.conditional_reroute_count += 1
+                self.conditional_reroute_events.append(conv_event.event_id)
 
         return QualityPlan(
             conversation_id=f"conv_{conv_event.event_id}",
