@@ -86,6 +86,9 @@ class EnvelopeMetadata(BaseModel):
     kb_version: str = ""
     generator_version: str = ""
     extraction_timestamp: str = ""
+    # True when this envelope was written for a conversation that was skipped during
+    # generation (POST-GEN SKIP or retries-exhausted). Claims may be partial.
+    skipped_during_generation: bool = False
 
 
 # ---------------------------------------------------------------------------

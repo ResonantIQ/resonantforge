@@ -208,55 +208,65 @@ def write_single_envelope(
         kb_version:          KB content hash for provenance.
         source_corpus:       Path string to the originating corpus directory.
         extraction_timestamp: ISO-8601 UTC timestamp; defaults to now.
-        skipped_during_generation: if True, the labels.json template is tagged
-            "skipped_during_generation" (for POST-GEN SKIP envelopes).
+        skipped_during_generation: if True, sets metadata.skipped_during_generation
+            and tags the labels.json template. Used for POST-GEN SKIP envelopes
+            where claims may be partial and validation did not complete.
     """
-    ts = extraction_timestamp or datetime.now(timezone.utc).isoformat()
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
 
-    claims_payload = [c.model_dump(mode="json") for c in extracted_claims]
-    claims_canonical = json.dumps(
-        claims_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-    )
-    claims_hash = "sha256:" + hashlib.sha256(claims_canonical.encode("utf-8")).hexdigest()
+    try:
+        ts = extraction_timestamp or datetime.now(timezone.utc).isoformat()
 
-    extraction_meta = ExtractionMeta(
-        model="claude-haiku-4-5-20251001",
-        prompt_version=_PROMPT_VERSION,
-        extracted_at=ts,
-        claims_hash=claims_hash,
-    )
+        claims_payload = [c.model_dump(mode="json") for c in extracted_claims]
+        claims_canonical = json.dumps(
+            claims_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        )
+        claims_hash = "sha256:" + hashlib.sha256(claims_canonical.encode("utf-8")).hexdigest()
 
-    envelope = ReplayEnvelope(
-        schema_version=_SCHEMA_VERSION,
-        conv_id=conv_id,
-        agent_prose=agent_prose,
-        customer_prose=customer_prose,
-        quality_plan=quality_plan,
-        kb_chunks=kb_chunks,
-        lexicons=lexicons,
-        brand_voice=brand_voice,
-        validator_inputs=ValidatorInputs(
-            accuracy=AccuracyValidatorInputs(
-                extracted_claims=extracted_claims,
-                extraction_meta=extraction_meta,
-            )
-        ),
-        metadata=EnvelopeMetadata(
+        extraction_meta = ExtractionMeta(
+            model="claude-haiku-4-5-20251001",
+            prompt_version=_PROMPT_VERSION,
+            extracted_at=ts,
+            claims_hash=claims_hash,
+        )
+
+        envelope = ReplayEnvelope(
+            schema_version=_SCHEMA_VERSION,
             conv_id=conv_id,
-            source_corpus=source_corpus,
-            pipeline_version=pipeline_version,
-            kb_version=kb_version,
-            generator_version=pipeline_version,
-            extraction_timestamp=ts,
-        ),
-    )
+            agent_prose=agent_prose,
+            customer_prose=customer_prose,
+            quality_plan=quality_plan,
+            kb_chunks=kb_chunks,
+            lexicons=lexicons,
+            brand_voice=brand_voice,
+            validator_inputs=ValidatorInputs(
+                accuracy=AccuracyValidatorInputs(
+                    extracted_claims=extracted_claims,
+                    extraction_meta=extraction_meta,
+                )
+            ),
+            metadata=EnvelopeMetadata(
+                conv_id=conv_id,
+                source_corpus=source_corpus,
+                pipeline_version=pipeline_version,
+                kb_version=kb_version,
+                generator_version=pipeline_version,
+                extraction_timestamp=ts,
+                skipped_during_generation=skipped_during_generation,
+            ),
+        )
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "envelope.json").write_text(
-        json.dumps(envelope.model_dump(mode="json"), indent=2),
-        encoding="utf-8",
-    )
-    _write_label_template(output_dir, conv_id, skipped_during_generation=skipped_during_generation)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "envelope.json").write_text(
+            json.dumps(envelope.model_dump(mode="json"), indent=2),
+            encoding="utf-8",
+        )
+        _write_label_template(output_dir, conv_id, skipped_during_generation=skipped_during_generation)
+    except OSError as exc:
+        # Transient I/O failure must never cascade to the smoke run.
+        # Envelope is reproducible from corpus; corpus record durability is independent.
+        _log.warning("replay envelope write failed for %s: %s", conv_id, exc)
 
 
 def extract_envelopes(

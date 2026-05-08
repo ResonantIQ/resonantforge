@@ -126,6 +126,23 @@ def _log(config: PipelineConfig, msg: str) -> None:
         print(f"[rforge] {msg}")
 
 
+def compute_kb_version(kb_chunks: list) -> str:
+    """
+    Compute a semantically-stable content hash of the KB chunk list.
+
+    Uses sorted(chunk_id + chunk_text) so the hash is stable across
+    serialisation changes, field-ordering differences, and re-runs that
+    produce identical chunk content. This is the canonical kb_version for
+    both inline-written envelopes and the manifest — retire any file-SHA
+    alternative.
+    """
+    source = "".join(
+        c.chunk_id + c.chunk_text
+        for c in sorted(kb_chunks, key=lambda c: c.chunk_id)
+    )
+    return hashlib.sha256(source.encode()).hexdigest()
+
+
 def _sha256_jsonl(lines: list[str]) -> str:
     """Compute a SHA-256 hex digest over a list of JSONL lines."""
     h = hashlib.sha256()
@@ -649,6 +666,75 @@ def _make_skipped_record(
     )
 
 
+def _write_skip_envelope(
+    *,
+    conv_id: str,
+    conv_event: SimEvent,
+    quality_plan: QualityPlan | None,
+    kb_chunks: list,
+    profile,  # type: ignore[type-arg]
+    envelope_agent_prose: str | None,
+    envelope_customer_prose: str | None,
+    envelope_claims: list | None,
+    envelope_lexicons,  # EnvelopeLexicons | None
+    prose: str | None,
+    replay_corpus_dir: Path | None,
+    pipeline_version: str,
+    kb_version: str,
+    corpus_dir: Path | None,
+) -> None:
+    """Write a replay envelope for a skipped conversation.
+
+    Called on both POST-GEN SKIP and retries-exhausted paths. Envelopes are
+    tagged skipped_during_generation=True so replay tooling can distinguish
+    them from successful conversations. No-op when replay_corpus_dir is None
+    or when no prose is available (API-error skips with no text to analyse).
+    """
+    if replay_corpus_dir is None:
+        return
+    if envelope_agent_prose is None and prose is None:
+        return
+
+    from resonantforge.replay.extractor import (  # noqa: PLC0415
+        _brand_voice_config,
+        _lexicons_from_profile,
+        write_single_envelope,
+    )
+
+    if envelope_agent_prose is not None:
+        _ap = envelope_agent_prose
+        _cp = envelope_customer_prose or ""
+    else:
+        _ap, _cp = _split_prose_turns(prose or "")
+
+    _lex = envelope_lexicons if envelope_lexicons is not None else _lexicons_from_profile(profile.name)
+    _bv = _brand_voice_config(profile.name)
+    _qp = quality_plan or QualityPlan(
+        conversation_id=conv_id,
+        trigger_event_id=conv_event.event_id,
+        rubric_targets=RubricTarget(),
+        knowledge_citations=KnowledgeCitations(),
+        prose_generation_directives="(skipped during generation — no quality plan resolved)",
+        kb_chunks_required=[],
+    )
+
+    write_single_envelope(
+        output_dir=replay_corpus_dir / conv_id,
+        conv_id=conv_id,
+        agent_prose=_ap,
+        customer_prose=_cp,
+        quality_plan=_qp,
+        kb_chunks=list(kb_chunks),
+        lexicons=_lex,
+        brand_voice=_bv,
+        extracted_claims=envelope_claims or [],
+        pipeline_version=pipeline_version,
+        kb_version=kb_version,
+        source_corpus=str(corpus_dir) if corpus_dir else "",
+        skipped_during_generation=True,
+    )
+
+
 def _generate_prose_for_chunk(
     conv_id: str,
     account_id: str,
@@ -931,13 +1017,17 @@ def _generate_prose_for_chunk(
                 retry_count=attempt,
             )
 
-            if post_result.overall_verdict == ValidationVerdict.PASS:
-                _progress("passed")
-                # Capture for replay envelope (zero extra cost — claims already extracted).
+            # Always capture the latest attempt's extraction for envelope writing.
+            # Claims are captured on every attempt so that skip-path envelopes
+            # include whatever partial extraction was produced, not just PASS results.
+            if accuracy_signals is not None:
                 _envelope_agent_prose = agent_prose
                 _envelope_customer_prose = customer_prose
-                _envelope_claims = list(accuracy_signals.claims) if accuracy_signals else []
+                _envelope_claims = list(accuracy_signals.claims)
                 _envelope_lexicons = lexicons
+
+            if post_result.overall_verdict == ValidationVerdict.PASS:
+                _progress("passed")
                 break
             elif post_result.overall_verdict == ValidationVerdict.SKIP:
                 skip_tracker.prose_fact_failures += 1
@@ -949,6 +1039,22 @@ def _generate_prose_for_chunk(
                     final_retry_count=attempt, validator_verdicts=validator_verdicts,
                     prose=prose,
                 ))
+                _write_skip_envelope(
+                    conv_id=conv_id,
+                    conv_event=conv_event,
+                    quality_plan=quality_plan,
+                    kb_chunks=kb_chunks,
+                    profile=profile,
+                    envelope_agent_prose=_envelope_agent_prose,
+                    envelope_customer_prose=_envelope_customer_prose,
+                    envelope_claims=_envelope_claims,
+                    envelope_lexicons=_envelope_lexicons,
+                    prose=prose,
+                    replay_corpus_dir=replay_corpus_dir,
+                    pipeline_version=pipeline_version,
+                    kb_version=kb_version,
+                    corpus_dir=corpus_dir,
+                )
                 return None
             else:  # FAIL — retry on next attempt
                 _log(config, f"  POST-GEN FAIL (attempt {attempt + 1}) {conv_id}")
@@ -967,6 +1073,22 @@ def _generate_prose_for_chunk(
             final_retry_count=max_retries, validator_verdicts=last_validator_verdicts,
             prose=prose,
         ))
+        _write_skip_envelope(
+            conv_id=conv_id,
+            conv_event=conv_event,
+            quality_plan=quality_plan,
+            kb_chunks=kb_chunks,
+            profile=profile,
+            envelope_agent_prose=_envelope_agent_prose,
+            envelope_customer_prose=_envelope_customer_prose,
+            envelope_claims=_envelope_claims,
+            envelope_lexicons=_envelope_lexicons,
+            prose=prose,
+            replay_corpus_dir=replay_corpus_dir,
+            pipeline_version=pipeline_version,
+            kb_version=kb_version,
+            corpus_dir=corpus_dir,
+        )
         return None
 
     if prose is None:
@@ -1200,6 +1322,12 @@ def _run_pipeline_inner(
     )
     _log(config, f"  {len(agent_profiles)} agents, hash={agents_hash[:16]}…")
 
+    # Chunk-content hash computed post-contamination: semantically stable across
+    # serialisation changes. Used for both inline envelope kb_version and manifest.
+    # Replaces kb_hash (JSONL file SHA) which is brittle to ordering/formatting.
+    _kb_version = compute_kb_version(kb_chunks)
+    _log(config, f"  kb_version={_kb_version[:16]}…")
+
     # ==================================================================
     # Phase 3 — Chunked prose generation
     # ==================================================================
@@ -1329,7 +1457,7 @@ def _run_pipeline_inner(
                 progress_cb=progress_cb,
                 replay_corpus_dir=_replay_dir,
                 pipeline_version=_pipeline_version,
-                kb_version=kb_hash,
+                kb_version=_kb_version,
                 corpus_dir=profile_dir,
             )
 
@@ -1483,13 +1611,7 @@ def _run_pipeline_inner(
     planted_quality_hash = _sha256_jsonl(plan_lines)
     atomic_write_jsonl(profile_dir / "planted_quality.jsonl", plan_lines)
 
-    # --- KB domain telemetry ---
-    # kb_version: deterministic hash of sorted chunk_ids + chunk_text.
-    _kb_version_source = "".join(
-        c.chunk_id + c.chunk_text
-        for c in sorted(kb_chunks, key=lambda c: c.chunk_id)
-    )
-    _kb_version = hashlib.sha256(_kb_version_source.encode()).hexdigest()
+    # _kb_version already computed post-contamination in Phase 2.
 
     # domain_distribution_observed: count CONVERSATION_STARTED events per domain.
     _domain_dist: dict[str, int] = {}

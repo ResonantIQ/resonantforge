@@ -114,7 +114,8 @@ An envelope is a self-contained snapshot of every input a validator needs to rep
     "pipeline_version": "0.2.0",
     "kb_version": "sha256:abcdef1234...",
     "generator_version": "0.2.0",
-    "extraction_timestamp": "2026-05-05T22:00:00Z"
+    "extraction_timestamp": "2026-05-05T22:00:00Z",
+    "skipped_during_generation": false
   }
 }
 ```
@@ -168,6 +169,7 @@ The `alignment` field on each Claim is `null` at extraction time; it is populate
 - `pipeline_version` and `generator_version` — from `manifest.generator_version` at extraction time.
 - `kb_version` — from `manifest.kb_version` (SHA-256 of sorted `chunk_id + chunk_text` pairs).
 - `extraction_timestamp` — ISO-8601 UTC timestamp when `extract-envelopes` ran.
+- `skipped_during_generation` — `true` when this envelope was written for a conversation that was skipped during generation (POST-GEN SKIP or retries-exhausted path). The `extracted_claims` list reflects whatever partial extraction was produced before the skip, which may be incomplete. Replay tooling uses this flag to distinguish skip-path envelopes from successful conversations. Defaults to `false`.
 
 ---
 
