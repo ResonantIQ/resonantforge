@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from resonantforge.schemas import ConstraintType, KBChunk
+from resonantforge.schemas import ConstraintType, KBChunk, KBChunkBranch
 
 
 def get_saas_kb_chunks() -> list[KBChunk]:
@@ -183,6 +183,26 @@ def get_saas_kb_chunks() -> list[KBChunk]:
         effective_date=date(2026, 1, 15),
         cat11_gate="gate_1",
         domains=["refund_policy"],
+        branches=[
+            KBChunkBranch(
+                id="monthly",
+                condition="monthly plan customer",
+                constraints=["within 30 days", "billing portal"],
+                content=(
+                    "Refund requests within 30 days are self-serve for monthly plan customers "
+                    "via the billing portal."
+                ),
+            ),
+            KBChunkBranch(
+                id="annual",
+                condition="annual plan customer",
+                constraints=["billing support"],
+                content=(
+                    "Annual plan customers must contact billing support to initiate a refund; "
+                    "self-serve refund is not available for annual accounts."
+                ),
+            ),
+        ],
     ))
 
     chunks.append(KBChunk(

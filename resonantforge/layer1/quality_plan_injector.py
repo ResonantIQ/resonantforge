@@ -766,8 +766,23 @@ class QualityPlanInjector:
                         planted_constraint=planted_constraint,
                         planted_contradiction=planted_contradiction,
                     )
+                    if spec["type"] == "control":
+                        cat11_gate = "gate_1"
                 self.conditional_reroute_count += 1
                 self.conditional_reroute_events.append(conv_event.event_id)
+
+        # For conditional_applied plans on multi-branch chunks, record which branch
+        # the scenario targets so the extractor can scope its constraint check (RFORGE-37).
+        target_branch: str | None = None
+        if (
+            rubric.accuracy is not None
+            and rubric.accuracy.precision == "conditional_applied"
+            and kb_required
+        ):
+            _chunks_by_id = {c.chunk_id: c for c in kb_chunks}
+            _ca_chunk = _chunks_by_id.get(kb_required[0])
+            if _ca_chunk is not None and _ca_chunk.branches:
+                target_branch = self.rng.choice(_ca_chunk.branches).id
 
         return QualityPlan(
             conversation_id=f"conv_{conv_event.event_id}",
@@ -781,4 +796,5 @@ class QualityPlanInjector:
             kb_chunks_required=kb_required,
             planted_constraint=planted_constraint,
             planted_contradiction=planted_contradiction,
+            target_branch=target_branch,
         )

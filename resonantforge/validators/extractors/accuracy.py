@@ -325,7 +325,12 @@ def _check_constraint_type_applies(chunk: KBChunk, conversation_context: str) ->
     return False
 
 
-def _check_chunk_relevance(claim: Claim, chunk: KBChunk, synonym_map: dict[str, str]) -> dict[str, Any]:
+def _check_chunk_relevance(
+    claim: Claim,
+    chunk: KBChunk,
+    synonym_map: dict[str, str],
+    target_branch: str | None = None,
+) -> dict[str, Any]:
     """
     Steps 3.2 and 3.3: Determine whether a KB chunk is topically relevant to a claim
     and classify their alignment relationship.
@@ -337,10 +342,24 @@ def _check_chunk_relevance(claim: Claim, chunk: KBChunk, synonym_map: dict[str, 
       - "supported": chunk supports the claim with constraints preserved.
       - "not_found": chunk is not relevant to this claim.
 
+    For multi-branch ALLOW_CONDITION chunks (chunk.branches non-empty):
+      - target_branch provided: constraint check scoped to global_constraints +
+        that branch's constraints only.
+      - target_branch absent (organic): skip constraint check; run per-claim
+        cross-branch contamination check instead (constraint_preserved=False if
+        the claim contains constraints from ≥2 different branches).
+
+    Known residual gap: cross-claim contamination is not detected. Conversation-level
+    contamination check was rejected due to false-positive rate on legitimate
+    full-policy disclosure ("for monthly: 30 days; for annual: credits"). Turn-scoped
+    contamination is a candidate tightening if the failure mode surfaces in production.
+
     Args:
         claim: a single extracted Claim.
         chunk: a KB chunk candidate.
         synonym_map: for normalizing both claim and chunk text before comparison.
+        target_branch: branch id from the quality plan for multi-branch chunks;
+            None for organic conversations or single-branch chunks.
 
     Returns:
         Dict with keys: relevant, alignment, constraints_in_chunk, constraint_preserved.
@@ -386,13 +405,49 @@ def _check_chunk_relevance(claim: Claim, chunk: KBChunk, synonym_map: dict[str, 
             }
 
     # Overgeneralization check (Step 5): chunk has constraints the claim omits.
-    constraints_in_chunk = _extract_constraints_from_text(chunk.chunk_text)
-    constraints_in_claim = _extract_constraints_from_text(claim.claim_text)
-
+    #
+    # Multi-branch ALLOW_CONDITION chunks use branch-scoped logic (RFORGE-37):
+    #   - target_branch known: check only global_constraints + that branch's constraints
+    #   - target_branch absent (organic): skip constraint check; run contamination check
+    #
+    # Single-branch chunks (no branches field): existing full-chunk constraint check.
     constraint_preserved = True
-    if constraints_in_chunk and not constraints_in_claim:
-        # The chunk qualifies its statement; the claim does not → overgeneralization.
-        constraint_preserved = False
+
+    if chunk.branches:
+        if target_branch is not None:
+            # Planted scenario: scope constraint check to the target branch only.
+            # Use substring matching (not regex) — branch.constraints are authored
+            # phrases, not necessarily regex-pattern-matchable.
+            branch_map = {b.id: b for b in chunk.branches}
+            branch = branch_map.get(target_branch)
+            scoped_constraints = list(chunk.global_constraints)
+            if branch is not None:
+                scoped_constraints.extend(branch.constraints)
+            constraints_in_chunk = scoped_constraints
+            claim_lower = claim.claim_text.lower()
+            constraints_in_claim = [c for c in scoped_constraints if c.lower() in claim_lower]
+            if scoped_constraints and not constraints_in_claim:
+                constraint_preserved = False
+        else:
+            # Organic scenario: skip single-branch constraint check; run per-claim
+            # cross-branch contamination check instead.
+            constraints_in_chunk = []
+            claim_text_lower = claim.claim_text.lower()
+            branches_hit: set[str] = set()
+            for branch in chunk.branches:
+                for phrase in branch.constraints:
+                    if phrase.lower() in claim_text_lower:
+                        branches_hit.add(branch.id)
+                        break
+            if len(branches_hit) >= 2:
+                # Single claim mixes constraints from multiple branches — incoherent.
+                constraint_preserved = False
+    else:
+        # Single-branch chunk: original full-chunk constraint check.
+        constraints_in_chunk = _extract_constraints_from_text(chunk.chunk_text)
+        constraints_in_claim = _extract_constraints_from_text(claim.claim_text)
+        if constraints_in_chunk and not constraints_in_claim:
+            constraint_preserved = False
 
     return {
         "relevant": True,
@@ -440,6 +495,7 @@ def run_kb_alignment_pipeline(
     top_k: int = 3,
     planted_constraint: str | None = None,
     planted_contradiction: dict | None = None,
+    target_branch: str | None = None,
 ) -> AccuracySignals:
     """
     Steps 2–8: Deterministic KB alignment pipeline.
@@ -517,7 +573,7 @@ def run_kb_alignment_pipeline(
         claim_constraint_preserved = True
 
         for chunk in candidate_chunks:
-            result = _check_chunk_relevance(claim, chunk, synonym_map)
+            result = _check_chunk_relevance(claim, chunk, synonym_map, target_branch=target_branch)
 
             if not result["relevant"]:
                 continue
@@ -624,6 +680,7 @@ def extract_accuracy_signals(
     top_k: int = 3,
     planted_constraint: str | None = None,
     planted_contradiction: dict | None = None,
+    target_branch: str | None = None,
 ) -> AccuracySignals:
     """
     Full 8-step accuracy extraction pipeline entry point.
@@ -660,4 +717,5 @@ def extract_accuracy_signals(
         top_k=top_k,
         planted_constraint=planted_constraint,
         planted_contradiction=planted_contradiction,
+        target_branch=target_branch,
     )

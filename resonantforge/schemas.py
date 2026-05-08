@@ -243,7 +243,7 @@ class QualityPlan(BaseModel):
     kb_chunks_required: list[str] = Field(default_factory=list)  # ground truth chunks
     planted_constraint: Optional[str] = None  # normalized constraint phrase for overgeneralization events
     planted_contradiction: Optional[PlantedContradiction] = None  # fact/negation pair for contradicted:exact events
-    planted_contradiction: Optional[PlantedContradiction] = None  # fact/negation pair for contradicted:exact events
+    target_branch: Optional[str] = None  # branch id for conditional_applied plans on multi-branch chunks (RFORGE-37)
 
 
 # ---------------------------------------------------------------------------
@@ -257,6 +257,26 @@ class ConstraintType(str, Enum):
     ALLOW_CONDITION = "allow_condition"
     DENY_CONDITION = "deny_condition"
     INFORMATIONAL = "informational"
+
+
+class KBChunkBranch(BaseModel):
+    """
+    One branch of a multi-branch ALLOW_CONDITION chunk.
+
+    Multi-branch chunks encode policies that differ by customer type or context
+    (e.g. "monthly plan: 30-day window / annual plan: account credits"). Each
+    branch defines its applicable condition, the constraint phrases that must
+    appear in a correctly-applied claim for that branch, and the branch text.
+
+    The canonical pattern for any future multi-branch chunk type — see chunk
+    schema docs. Branch IDs must be unique within a chunk and stable across
+    corpus regeneration.
+    """
+
+    id: str  # e.g. "monthly", "annual" — stable, kebab-case
+    condition: str  # human-readable eligibility description
+    constraints: list[str]  # constraint phrases that must appear in branch claims
+    content: str  # the branch text excerpt
 
 
 class KBChunk(BaseModel):
@@ -297,6 +317,12 @@ class KBChunk(BaseModel):
     sanity_probe: bool = False  # rotational probe per separability hypothesis schedule (PR4+)
     claims: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Multi-branch support (RFORGE-37): populated only for ALLOW_CONDITION chunks that
+    # encode multiple policy branches in a single chunk. Empty list = single-branch chunk,
+    # existing constraint check applies. When populated, the extractor uses target_branch
+    # from the quality plan to scope the constraint check to one branch.
+    branches: list[KBChunkBranch] = Field(default_factory=list)
+    global_constraints: list[str] = Field(default_factory=list)  # constraints that apply to all branches
 
 
 # ---------------------------------------------------------------------------

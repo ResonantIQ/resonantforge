@@ -837,6 +837,7 @@ def _generate_prose_for_chunk(
                         if quality_plan.planted_contradiction is not None
                         else None
                     ),
+                    target_branch=quality_plan.target_branch,
                 )
             except ClaimExtractionError as exc:
                 _log(
