@@ -443,11 +443,17 @@ def _check_chunk_relevance(
                 # Single claim mixes constraints from multiple branches — incoherent.
                 constraint_preserved = False
     else:
-        # Single-branch chunk: original full-chunk constraint check.
-        constraints_in_chunk = _extract_constraints_from_text(chunk.chunk_text)
-        constraints_in_claim = _extract_constraints_from_text(claim.claim_text)
-        if constraints_in_chunk and not constraints_in_claim:
-            constraint_preserved = False
+        # Single-branch constraint check: only ALLOW_CONDITION chunks enforce constraints.
+        # INFORMATIONAL, DENY, and other chunk types provide context only — incidental
+        # numeric phrases (e.g. "up to 30 seconds" in a queuing note) must not trigger
+        # constraint_preserved=False on correctly-applied claims (RFORGE-39).
+        if chunk.constraint_type == ConstraintType.ALLOW_CONDITION:
+            constraints_in_chunk = _extract_constraints_from_text(chunk.chunk_text)
+            constraints_in_claim = _extract_constraints_from_text(claim.claim_text)
+            if constraints_in_chunk and not constraints_in_claim:
+                constraint_preserved = False
+        else:
+            constraints_in_chunk = []
 
     return {
         "relevant": True,
@@ -565,8 +571,15 @@ def run_kb_alignment_pipeline(
 
     per_claim_results: list[str] = []
     kb_chunks_used: list[str] = []
-    overall_overgeneralization = False
     blocking_violated = False
+
+    # Per-chunk any-wins tracking for overgeneralization (RFORGE-40):
+    # A chunk's constraint is considered "satisfied" if ANY claim preserves it.
+    # overgeneralization fires only if a chunk has violators and no preservers.
+    # This prevents a single procedural claim ("I can help you") from masking a
+    # policy claim that correctly includes the required constraint phrase.
+    _chunk_saw_preserve: set[str] = set()
+    _chunk_saw_violate: set[str] = set()
 
     for claim in claims:
         claim_best_alignment = "not_found"
@@ -584,14 +597,18 @@ def run_kb_alignment_pipeline(
             alignment = result["alignment"]
 
             # Step 5: Overgeneralization — chunk has constraints the claim drops.
-            # _check_chunk_relevance returns alignment="partial" when constraint_preserved=False,
-            # so the original "alignment == 'supported'" gate was dead code (never reachable).
-            # The "alignment != 'contradicted'" guard prevents DENY_CONDITION chunks from being
-            # double-counted: those already return constraint_preserved=False via the contradicted
-            # path and are handled as contradictions, not overgeneralizations.
+            # Track per-chunk preserve/violate sets; fire overgeneralization only if a
+            # chunk has no preservers (any-wins). DENY_CONDITION contradictions are
+            # excluded — they are handled as contradictions, not overgeneralizations.
+            if result["constraints_in_chunk"] and alignment != "contradicted":
+                cid = chunk.chunk_id
+                if result["constraint_preserved"]:
+                    _chunk_saw_preserve.add(cid)
+                else:
+                    _chunk_saw_violate.add(cid)
+
             if not result["constraint_preserved"] and alignment != "contradicted":
                 alignment = "partial"
-                overall_overgeneralization = True
 
             # Step 6: Blocking deny-condition — a DENY_CONDITION chunk is active for
             # this conversation context, meaning the agent's positive claim is wrong.
@@ -624,6 +641,10 @@ def run_kb_alignment_pipeline(
         aggregate_alignment = "supported"
     else:
         aggregate_alignment = "not_found"
+
+    # Any-wins aggregation: a chunk fires overgeneralization only if no claim preserved
+    # its constraints. Chunks where at least one claim preserved the constraint are cleared.
+    overall_overgeneralization = bool(_chunk_saw_violate - _chunk_saw_preserve)
 
     # Step 5 (override): planted-constraint deterministic check.
     # When a planted_constraint is provided, replace the regex-based overgeneralization

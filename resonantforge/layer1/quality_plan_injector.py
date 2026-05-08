@@ -619,11 +619,15 @@ class QualityPlanInjector:
                 kb_required = []
                 multi_chunk = False
             elif label.precision == "conditional_applied":
-                # Gate 1: needs allow + deny chunk to test conditional application
+                # Gate 1: needs allow + deny chunk to test conditional application.
+                # DENY chunks must NOT be in kb_required — they trigger a contradicted
+                # alignment on correct positive claims (RFORGE-40). Include DENY in
+                # should_cite so the LLM knows the full policy context, but the extractor
+                # only validates against allow_ids.
                 combined = allow_ids + deny_ids
                 citations = KnowledgeCitations(should_cite=combined, must_not_cite=[])
-                kb_required = combined
-                multi_chunk = True
+                kb_required = allow_ids
+                multi_chunk = len(allow_ids) > 1
             elif label.precision == "overgeneralized":
                 # Pre-filter: only chunks with extractable constraints qualify.
                 # If the picked chunk has no constraints, retry up to 2 times;
