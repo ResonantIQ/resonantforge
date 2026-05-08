@@ -18,7 +18,36 @@ present for a conversation to be included in a replay run.
 
 ## Workflow
 
-### Step 1 — Extract envelopes (one-time, paid)
+### Step 1 — Generate corpus (envelopes written automatically)
+
+```bash
+rforge generate --profile saas --accounts 10 --months 3
+```
+
+Envelopes are written to `replay_corpus/saas/` automatically alongside the
+corpus. Planted conversations use claims already extracted during accuracy
+validation — **no extra LLM cost**. Organic conversations get an envelope
+with empty claims (useful for replaying non-accuracy dimensions).
+
+To write envelopes to a custom path:
+
+```bash
+rforge generate --profile saas --accounts 10 --months 3 \
+  --replay-out /path/to/my/replay_corpus
+```
+
+To skip envelope writing entirely (uncommon):
+
+```bash
+rforge generate --profile saas --accounts 10 --months 3 --no-replay
+```
+
+### Step 1b — Extract envelopes from an existing corpus (post-hoc, paid)
+
+If you have a corpus without envelopes (generated before this feature, or with
+`--no-replay`), you can extract them after the fact. This path calls
+`extract_claims_llm` once per conversation — the one LLM cost in the replay
+workflow.
 
 ```bash
 rforge replay extract-envelopes \
@@ -26,11 +55,6 @@ rforge replay extract-envelopes \
   --profile saas \
   --out replay_corpus/saas
 ```
-
-This reads `corpus/saas/conversations.jsonl`, calls `extract_claims_llm` once
-per conversation (the only LLM call in the replay workflow), and writes:
-- `replay_corpus/saas/{conv_id}/envelope.json` — frozen inputs
-- `replay_corpus/saas/{conv_id}/labels.json` — empty template (if absent)
 
 Re-running is safe: envelopes are overwritten; existing `labels.json` files
 are never touched.
@@ -74,8 +98,19 @@ The fingerprint changes when verdicts change — that's the signal that your
 code change had an effect.
 
 To re-extract after changing `extracted_claims` (e.g. accuracy prompt revision),
-re-run Step 1. Existing labels survive re-extraction unchanged — see
+re-run Step 1b. Existing labels survive re-extraction unchanged — see
 `harness/docs/replay-envelope-schema.md § Re-extraction and Label Survival`.
+
+## Cost model
+
+| Path | LLM calls |
+|---|---|
+| `rforge generate` (default) | Prose generation + claim extraction for planted convs (already paid). No extra cost for envelopes. |
+| `rforge replay extract-envelopes` | One claim extraction call per conversation. |
+| `rforge replay run` | Zero. Free forever. |
+
+The key principle: **every smoke run automatically produces a replay corpus**.
+Never lose the ability to replay a failing conversation.
 
 ## Schema Versions
 

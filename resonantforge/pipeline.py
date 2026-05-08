@@ -51,8 +51,10 @@ from resonantforge.schemas import (
     GateSeverity,
     GateViolation,
     KBChunk,
+    KnowledgeCitations,
     Manifest,
     QualityPlan,
+    RubricTarget,
     SimEvent,
     SimEventType,
     SkippedConversationRecord,
@@ -106,6 +108,11 @@ class PipelineConfig:
     anthropic_api_key: str | None = None  # None → dry-run (no LLM calls)
     verbose: bool = False
     force: bool = False  # when True, overwrite existing target directory contents
+    # When set, write a replay envelope for every accepted conversation during Phase 3.
+    # Planted conversations use already-extracted claims (zero extra LLM cost).
+    # Organic conversations get an envelope with empty claims (non-accuracy dims replay).
+    # Defaults to None (no envelopes written). rforge generate sets this automatically.
+    replay_corpus_dir: Path | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -660,6 +667,10 @@ def _generate_prose_for_chunk(
     ledger: DisagreementLedger,
     skipped_records: "list[SkippedConversationRecord]",
     progress_cb: Callable[[str], None] | None = None,
+    replay_corpus_dir: Path | None = None,
+    pipeline_version: str = "0.2.0",
+    kb_version: str = "",
+    corpus_dir: Path | None = None,
 ) -> ConversationRecord | None:
     """
     Generate prose for one (account_id, month_index, conv_event) chunk.
@@ -693,6 +704,13 @@ def _generate_prose_for_chunk(
         ledger:            DisagreementLedger accumulating soft-judge records.
         skipped_records:   Accumulator list; a SkippedConversationRecord is appended
                            here whenever this function returns None.
+        replay_corpus_dir: If set, write a replay envelope for this conversation.
+                           Planted conversations use claims already extracted during
+                           accuracy validation — zero extra LLM cost. Organic
+                           conversations get an envelope with empty claims.
+        pipeline_version:  Generator version string for envelope metadata.
+        kb_version:        KB content hash for envelope provenance metadata.
+        corpus_dir:        Source corpus directory path for envelope metadata.
 
     Returns:
         A ConversationRecord on success, or None if the chunk was skipped.
@@ -740,6 +758,12 @@ def _generate_prose_for_chunk(
     max_retries = 2
     prose: str | None = None
     last_validator_verdicts: list = []  # updated after each validation run; used for skip records
+
+    # Captured on the passing attempt; used to write the replay envelope at the end.
+    _envelope_agent_prose: str | None = None
+    _envelope_customer_prose: str | None = None
+    _envelope_claims: list | None = None
+    _envelope_lexicons = None
 
     for attempt in range(max_retries + 1):
         if attempt > 0:
@@ -909,6 +933,11 @@ def _generate_prose_for_chunk(
 
             if post_result.overall_verdict == ValidationVerdict.PASS:
                 _progress("passed")
+                # Capture for replay envelope (zero extra cost — claims already extracted).
+                _envelope_agent_prose = agent_prose
+                _envelope_customer_prose = customer_prose
+                _envelope_claims = list(accuracy_signals.claims) if accuracy_signals else []
+                _envelope_lexicons = lexicons
                 break
             elif post_result.overall_verdict == ValidationVerdict.SKIP:
                 skip_tracker.prose_fact_failures += 1
@@ -948,6 +977,49 @@ def _generate_prose_for_chunk(
             final_retry_count=0, validator_verdicts=[], prose=None,
         ))
         return None
+
+    # Write replay envelope if requested.
+    # Planted conversations have claims from accuracy_signals (zero extra LLM cost).
+    # Organic conversations (no quality_plan) get an empty claims list — still useful
+    # for replaying non-accuracy dimensions against frozen lexicons.
+    # Local import breaks the circular dependency: extractor.py imports _split_prose_turns
+    # from pipeline.py, so pipeline.py cannot import from extractor.py at module level.
+    if replay_corpus_dir is not None:
+        from resonantforge.replay.extractor import (  # noqa: PLC0415
+            _brand_voice_config,
+            _lexicons_from_profile,
+            write_single_envelope,
+        )
+        assert prose is not None
+        _ap, _cp = (
+            (_envelope_agent_prose, _envelope_customer_prose)
+            if _envelope_agent_prose is not None
+            else _split_prose_turns(prose)
+        )
+        _lex = _envelope_lexicons if _envelope_lexicons is not None else _lexicons_from_profile(profile.name)
+        _bv = _brand_voice_config(profile.name)
+        _qp = quality_plan or QualityPlan(
+            conversation_id=conv_id,
+            trigger_event_id=conv_event.event_id,
+            rubric_targets=RubricTarget(),
+            knowledge_citations=KnowledgeCitations(),
+            prose_generation_directives="(organic — no quality plan)",
+            kb_chunks_required=[],
+        )
+        write_single_envelope(
+            output_dir=replay_corpus_dir / conv_id,
+            conv_id=conv_id,
+            agent_prose=_ap or "",
+            customer_prose=_cp or "",
+            quality_plan=_qp,
+            kb_chunks=list(kb_chunks),
+            lexicons=_lex,
+            brand_voice=_bv,
+            extracted_claims=_envelope_claims or [],
+            pipeline_version=pipeline_version,
+            kb_version=kb_version,
+            source_corpus=str(corpus_dir) if corpus_dir else "",
+        )
 
     return _make_conversation_record(
         conv_id=conv_id,
@@ -1133,6 +1205,17 @@ def _run_pipeline_inner(
     # ==================================================================
     _log(config, "Phase 3: prose generation")
 
+    # Resolve replay corpus directory. When config.replay_corpus_dir is set, write
+    # a replay envelope per conversation using already-extracted claims (no extra
+    # LLM cost for planted conversations).
+    _replay_dir: Path | None = None
+    if config.replay_corpus_dir is not None:
+        _replay_dir = config.replay_corpus_dir / profile.name
+        _replay_dir.mkdir(parents=True, exist_ok=True)
+        _log(config, f"  replay corpus → {_replay_dir}")
+
+    _pipeline_version = "0.2.0"
+
     validator = PlanValidator()
     skip_tracker = SkipRateTracker()
 
@@ -1244,6 +1327,10 @@ def _run_pipeline_inner(
                 ledger=ledger,
                 skipped_records=skipped_records,
                 progress_cb=progress_cb,
+                replay_corpus_dir=_replay_dir,
+                pipeline_version=_pipeline_version,
+                kb_version=kb_hash,
+                corpus_dir=profile_dir,
             )
 
             if result is None:

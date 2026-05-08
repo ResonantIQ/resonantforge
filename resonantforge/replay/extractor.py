@@ -22,7 +22,6 @@ from resonantforge.replay.schemas import (
     EnvelopeMetadata,
     ExtractionMeta,
     ReplayEnvelope,
-    ReplayLabels,
     ValidatorInputs,
 )
 from resonantforge.schemas import (
@@ -171,6 +170,95 @@ def _write_label_template(
     label_path.write_text(json.dumps(template, indent=2), encoding="utf-8")
 
 
+def write_single_envelope(
+    *,
+    output_dir: Path,
+    conv_id: str,
+    agent_prose: str,
+    customer_prose: str,
+    quality_plan: "QualityPlan",
+    kb_chunks: "list[KBChunk]",
+    lexicons: "EnvelopeLexicons",
+    brand_voice: "BrandVoiceConfig",
+    extracted_claims: "list[Claim]",
+    pipeline_version: str,
+    kb_version: str,
+    source_corpus: str,
+    extraction_timestamp: str | None = None,
+    skipped_during_generation: bool = False,
+) -> None:
+    """
+    Write a single replay envelope and labels.json template to disk.
+
+    This is the shared write primitive used by both the inline pipeline path
+    (claims already extracted at zero extra cost) and the post-hoc
+    extract-envelopes command (claims extracted after the fact).
+
+    Args:
+        output_dir:          Destination directory (created if absent).
+        conv_id:             Conversation identifier; must match quality_plan.
+        agent_prose:         Agent turns only (speaker prefix stripped).
+        customer_prose:      Customer turns only (speaker prefix stripped).
+        quality_plan:        Full quality plan (frozen at write time).
+        kb_chunks:           KB chunks relevant to this conversation.
+        lexicons:            Frozen extractor lexicons.
+        brand_voice:         Frozen brand voice config.
+        extracted_claims:    Claims to freeze; pass [] for organic conversations.
+        pipeline_version:    Generator version string (e.g. "0.2.0").
+        kb_version:          KB content hash for provenance.
+        source_corpus:       Path string to the originating corpus directory.
+        extraction_timestamp: ISO-8601 UTC timestamp; defaults to now.
+        skipped_during_generation: if True, the labels.json template is tagged
+            "skipped_during_generation" (for POST-GEN SKIP envelopes).
+    """
+    ts = extraction_timestamp or datetime.now(timezone.utc).isoformat()
+
+    claims_payload = [c.model_dump(mode="json") for c in extracted_claims]
+    claims_canonical = json.dumps(
+        claims_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    claims_hash = "sha256:" + hashlib.sha256(claims_canonical.encode("utf-8")).hexdigest()
+
+    extraction_meta = ExtractionMeta(
+        model="claude-haiku-4-5-20251001",
+        prompt_version=_PROMPT_VERSION,
+        extracted_at=ts,
+        claims_hash=claims_hash,
+    )
+
+    envelope = ReplayEnvelope(
+        schema_version=_SCHEMA_VERSION,
+        conv_id=conv_id,
+        agent_prose=agent_prose,
+        customer_prose=customer_prose,
+        quality_plan=quality_plan,
+        kb_chunks=kb_chunks,
+        lexicons=lexicons,
+        brand_voice=brand_voice,
+        validator_inputs=ValidatorInputs(
+            accuracy=AccuracyValidatorInputs(
+                extracted_claims=extracted_claims,
+                extraction_meta=extraction_meta,
+            )
+        ),
+        metadata=EnvelopeMetadata(
+            conv_id=conv_id,
+            source_corpus=source_corpus,
+            pipeline_version=pipeline_version,
+            kb_version=kb_version,
+            generator_version=pipeline_version,
+            extraction_timestamp=ts,
+        ),
+    )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "envelope.json").write_text(
+        json.dumps(envelope.model_dump(mode="json"), indent=2),
+        encoding="utf-8",
+    )
+    _write_label_template(output_dir, conv_id, skipped_during_generation=skipped_during_generation)
+
+
 def extract_envelopes(
     profile_dir: Path,
     replay_corpus_dir: Path,
@@ -267,22 +355,8 @@ def extract_envelopes(
             anthropic_client=anthropic_client,
         )
 
-        claims_payload = [c.model_dump(mode="json") for c in extracted_claims]
-        claims_canonical = json.dumps(
-            claims_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-        )
-        claims_hash = "sha256:" + hashlib.sha256(claims_canonical.encode("utf-8")).hexdigest()
-
-        extraction_meta = ExtractionMeta(
-            model="claude-haiku-4-5-20251001",
-            prompt_version=_PROMPT_VERSION,
-            extracted_at=extraction_ts,
-            claims_hash=claims_hash,
-        )
-
-        # Build envelope
-        envelope = ReplayEnvelope(
-            schema_version=_SCHEMA_VERSION,
+        write_single_envelope(
+            output_dir=replay_corpus_dir / conv_id,
             conv_id=conv_id,
             agent_prose=agent_prose,
             customer_prose=customer_prose,
@@ -290,34 +364,12 @@ def extract_envelopes(
             kb_chunks=kb_chunks,
             lexicons=lexicons,
             brand_voice=bv_config,
-            validator_inputs=ValidatorInputs(
-                accuracy=AccuracyValidatorInputs(
-                    extracted_claims=extracted_claims,
-                    extraction_meta=extraction_meta,
-                )
-            ),
-            metadata=EnvelopeMetadata(
-                conv_id=conv_id,
-                source_corpus=str(profile_dir),
-                pipeline_version=pipeline_version,
-                kb_version=kb_version,
-                generator_version=pipeline_version,
-                extraction_timestamp=extraction_ts,
-            ),
+            extracted_claims=extracted_claims,
+            pipeline_version=pipeline_version,
+            kb_version=kb_version,
+            source_corpus=str(profile_dir),
+            extraction_timestamp=extraction_ts,
         )
-
-        # Write envelope
-        output_dir = replay_corpus_dir / conv_id
-        output_dir.mkdir(parents=True, exist_ok=True)
-        envelope_path = output_dir / "envelope.json"
-        envelope_path.write_text(
-            json.dumps(envelope.model_dump(mode="json"), indent=2),
-            encoding="utf-8",
-        )
-
-        # Write label template (skipped if labels.json already exists)
-        _write_label_template(output_dir, conv_id)
-
         extracted.append(conv_id)
 
     # Process skipped conversations (--include-skipped path).
@@ -346,21 +398,8 @@ def extract_envelopes(
             anthropic_client=anthropic_client,
         )
 
-        claims_payload = [c.model_dump(mode="json") for c in extracted_claims]
-        claims_canonical = json.dumps(
-            claims_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-        )
-        claims_hash = "sha256:" + hashlib.sha256(claims_canonical.encode("utf-8")).hexdigest()
-
-        extraction_meta = ExtractionMeta(
-            model="claude-haiku-4-5-20251001",
-            prompt_version=_PROMPT_VERSION,
-            extracted_at=extraction_ts,
-            claims_hash=claims_hash,
-        )
-
-        envelope = ReplayEnvelope(
-            schema_version=_SCHEMA_VERSION,
+        write_single_envelope(
+            output_dir=replay_corpus_dir / conv_id,
             conv_id=conv_id,
             agent_prose=agent_prose,
             customer_prose=customer_prose,
@@ -368,32 +407,13 @@ def extract_envelopes(
             kb_chunks=kb_chunks,
             lexicons=lexicons,
             brand_voice=bv_config,
-            validator_inputs=ValidatorInputs(
-                accuracy=AccuracyValidatorInputs(
-                    extracted_claims=extracted_claims,
-                    extraction_meta=extraction_meta,
-                )
-            ),
-            metadata=EnvelopeMetadata(
-                conv_id=conv_id,
-                source_corpus=str(profile_dir),
-                pipeline_version=pipeline_version,
-                kb_version=kb_version,
-                generator_version=pipeline_version,
-                extraction_timestamp=extraction_ts,
-            ),
+            extracted_claims=extracted_claims,
+            pipeline_version=pipeline_version,
+            kb_version=kb_version,
+            source_corpus=str(profile_dir),
+            extraction_timestamp=extraction_ts,
+            skipped_during_generation=True,
         )
-
-        output_dir = replay_corpus_dir / conv_id
-        output_dir.mkdir(parents=True, exist_ok=True)
-        envelope_path = output_dir / "envelope.json"
-        envelope_path.write_text(
-            json.dumps(envelope.model_dump(mode="json"), indent=2),
-            encoding="utf-8",
-        )
-
-        _write_label_template(output_dir, conv_id, skipped_during_generation=True)
-
         extracted.append(conv_id)
 
     return extracted

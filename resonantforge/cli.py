@@ -90,6 +90,8 @@ def cli() -> None:
 @click.option("--verbose", is_flag=True, default=False, help="Enable verbose output")
 @click.option("--dry-run", "dry_run", is_flag=True, default=False, help="Skip LLM calls; generate deterministic placeholder prose")
 @click.option("--force", is_flag=True, default=False, help="Overwrite existing output directory contents instead of failing fast.")
+@click.option("--replay-out", "replay_out", default=None, type=click.Path(), help="Root directory for replay envelopes (default: ./replay_corpus). Envelopes use already-extracted claims — no extra LLM cost.")
+@click.option("--no-replay", "no_replay", is_flag=True, default=False, help="Skip replay envelope writing entirely.")
 def generate(
     profile: str,
     accounts: Optional[int],
@@ -101,6 +103,8 @@ def generate(
     verbose: bool,
     dry_run: bool,
     force: bool,
+    replay_out: Optional[str],
+    no_replay: bool,
 ) -> None:
     """Run the corpus generation pipeline."""
     import sys as _sys
@@ -141,6 +145,15 @@ def generate(
     # --dry-run overrides any API key: treat as None (no LLM calls).
     effective_api_key: Optional[str] = None if dry_run else api_key
 
+    # Resolve replay corpus directory.
+    # Default: ./replay_corpus (sibling of ./corpus). Disable with --no-replay.
+    if no_replay:
+        resolved_replay_dir: Optional[Path] = None
+    elif replay_out is not None:
+        resolved_replay_dir = Path(replay_out)
+    else:
+        resolved_replay_dir = Path("replay_corpus")
+
     config = PipelineConfig(
         profile_name=profile,
         accounts=resolved_accounts,
@@ -150,6 +163,7 @@ def generate(
         anthropic_api_key=effective_api_key,
         verbose=verbose,
         force=force,
+        replay_corpus_dir=resolved_replay_dir,
     )
 
     mode_label = "dry-run" if effective_api_key is None else "live"
