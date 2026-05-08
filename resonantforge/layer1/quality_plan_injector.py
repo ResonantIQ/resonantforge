@@ -782,7 +782,15 @@ class QualityPlanInjector:
             _chunks_by_id = {c.chunk_id: c for c in kb_chunks}
             _ca_chunk = _chunks_by_id.get(kb_required[0])
             if _ca_chunk is not None and _ca_chunk.branches:
-                target_branch = self.rng.choice(_ca_chunk.branches).id
+                _picked_branch = self.rng.choice(_ca_chunk.branches)
+                target_branch = _picked_branch.id
+                # Prepend scenario context so the LLM generates content for the correct
+                # branch rather than inferring branch from the conversation context (RFORGE-38).
+                directives = (
+                    f"Scenario: The customer is a {_picked_branch.condition} customer. "
+                    f"Apply the {_picked_branch.id} branch of the policy below.\n\n"
+                    + directives
+                )
 
         return QualityPlan(
             conversation_id=f"conv_{conv_event.event_id}",

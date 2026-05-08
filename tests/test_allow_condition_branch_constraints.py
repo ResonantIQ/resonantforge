@@ -389,3 +389,64 @@ def test_injector_sets_target_branch_for_multi_branch_conditional_chunk():
             f"Plan {plan.conversation_id} target_branch={plan.target_branch!r} "
             f"is not a valid branch id. Valid: {branch_ids}"
         )
+
+
+def test_injector_branch_condition_prepended_to_prose_directive():
+    """
+    When the injector assigns target_branch on a conditional_applied plan,
+    the prose_generation_directives starts with a branch scenario line so the
+    LLM knows which customer scenario to portray (RFORGE-38).
+    """
+    from resonantforge.layer1.quality_plan_injector import QualityPlanInjector
+
+    rng = random.Random(42)
+    injector = QualityPlanInjector(rng=rng)
+
+    events = [
+        SimEvent(
+            event_id=f"evt_{i:03d}",
+            event_type=SimEventType.CONVERSATION_STARTED,
+            account_id="acc_001",
+            timestamp=datetime(2024, 1, 15, 10, 0, 0),
+            day_index=0,
+            month_index=0,
+            payload={
+                "domain": "refund_policy",
+                "intent": ["refund_request"],
+                "agent_id": "agent_001",
+                "surface_channel": "chat",
+            },
+        )
+        for i in range(80)
+    ]
+
+    plans = injector.inject(
+        events=events,
+        snapshots=[],
+        kb_chunks=[REFUND_MULTI_BRANCH_CHUNK],
+        planted_count=50,
+    )
+
+    ca_plans_with_branch = [
+        p for p in plans
+        if (
+            p.rubric_targets.accuracy is not None
+            and p.rubric_targets.accuracy.precision == "conditional_applied"
+            and "kb_refund_conditional_plan_type" in p.kb_chunks_required
+            and p.target_branch is not None
+        )
+    ]
+
+    assert ca_plans_with_branch, "Expected conditional_applied plans with target_branch set"
+
+    for plan in ca_plans_with_branch:
+        branch = next(b for b in REFUND_MULTI_BRANCH_CHUNK.branches if b.id == plan.target_branch)
+        assert plan.prose_generation_directives.startswith("Scenario:"), (
+            f"Plan {plan.conversation_id} directive should start with 'Scenario:' "
+            f"when target_branch={plan.target_branch!r}. "
+            f"Got: {plan.prose_generation_directives[:120]!r}"
+        )
+        assert branch.condition in plan.prose_generation_directives, (
+            f"Plan {plan.conversation_id} directive should contain branch condition "
+            f"{branch.condition!r}. Got: {plan.prose_generation_directives[:200]!r}"
+        )
