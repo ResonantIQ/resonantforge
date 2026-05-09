@@ -1030,7 +1030,8 @@ def _generate_prose_for_chunk(
                 _envelope_agent_prose = agent_prose
                 _envelope_customer_prose = customer_prose
                 _envelope_claims = list(accuracy_signals.claims)
-                _envelope_lexicons = lexicons
+                # _envelope_lexicons intentionally left None — _lexicons_from_profile
+                # returns the authoritative EnvelopeLexicons at write time.
 
             if post_result.overall_verdict == ValidationVerdict.PASS:
                 _progress("passed")
