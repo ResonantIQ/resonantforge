@@ -184,7 +184,7 @@ class RubricTarget(BaseModel):
     """
 
     empathy: Optional[Literal["low", "high"]] = None
-    resolution: Optional[Literal["weak", "strong"]] = None
+    resolution: Optional[Literal["weak", "guided", "strong"]] = None
     brand_voice_against: Optional[str] = None  # brand voice variant ID
     brand_voice_target: Optional[Literal["on_brand", "off_brand"]] = None
     accuracy: Optional[AccuracyLabel] = None
@@ -356,6 +356,8 @@ class ResolutionSignals(BaseModel):
 
     ``deflection_present`` is True when the agent redirects without addressing
     the root issue; ``resolution_blocked`` when external factors prevented resolution.
+    ``already_resolved`` is True when the customer's issue was already resolved
+    before the agent engaged (customer initiated contact after resolution).
     """
 
     solution_provided: bool
@@ -366,6 +368,7 @@ class ResolutionSignals(BaseModel):
     ownership_phrases: list[str]
     deflection_present: bool
     resolution_blocked: bool
+    already_resolved: bool = False
 
 
 class BrandVoiceSignals(BaseModel):

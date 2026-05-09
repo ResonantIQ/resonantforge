@@ -122,6 +122,8 @@ def _lexicons_from_profile(profile_name: str) -> EnvelopeLexicons:
         specific_actor_patterns=bundle.specific_actor_patterns,
         ownership_patterns=bundle.ownership_patterns,
         issue_keywords=bundle.issue_keywords,
+        completion_verb_patterns=bundle.completion_verb_patterns,
+        completion_resolution_patterns=bundle.completion_resolution_patterns,
         synonym_map=bundle.synonym_map,
     )
 

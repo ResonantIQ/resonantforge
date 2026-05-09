@@ -510,6 +510,8 @@ class LexiconsBundle:
     specific_actor_patterns: list[str]
     ownership_patterns: list[str]
     issue_keywords: list[str]
+    completion_verb_patterns: list[str]
+    completion_resolution_patterns: list[str]
     synonym_map: dict[str, str]
 
 
@@ -569,6 +571,8 @@ def _load_lexicons(profile) -> LexiconsBundle:  # type: ignore[type-arg]
         specific_actor_patterns=profile.specific_actor_patterns(),
         ownership_patterns=profile.ownership_patterns(),
         issue_keywords=profile.issue_keywords(),
+        completion_verb_patterns=profile.completion_verb_patterns(),
+        completion_resolution_patterns=profile.completion_resolution_patterns(),
         synonym_map=profile.synonym_map(),
     )
 
@@ -921,6 +925,8 @@ def _generate_prose_for_chunk(
                 lexicons.specific_actor_patterns,
                 lexicons.ownership_patterns,
                 lexicons.issue_keywords,
+                lexicons.completion_verb_patterns,
+                lexicons.completion_resolution_patterns,
             )
             _progress("validating brand_voice")
             brand_voice_signals = extract_brand_voice_signals(

@@ -84,8 +84,10 @@ def _prose_directive_for_resolution(target: str) -> str:
     """
     Return a plain-English prose generation directive for the resolution dimension.
 
-    ``weak`` targets use deflection and vagueness; ``strong`` targets require
-    ownership language and actionable next steps with temporal anchors.
+    ``weak`` targets use deflection and vagueness; ``guided`` targets require a
+    complete step-by-step walkthrough where the customer executes the steps;
+    ``strong`` targets require ownership language and actionable next steps with
+    temporal anchors.
     """
     if target == "weak":
         return (
@@ -93,11 +95,24 @@ def _prose_directive_for_resolution(target: str) -> str:
             "or 'our team will look into it' without committing to specific next steps. "
             "Do not provide a complete solution or temporal anchors."
         )
+    if target == "guided":
+        return (
+            "Agent should provide complete step-by-step instructions the customer can follow themselves. "
+            "Use imperative phrasing ('go to Settings', 'click on Integrations', 'paste the key'). "
+            "Do NOT include agent-ownership language or temporal anchors — "
+            "the customer is the one who will execute the steps."
+        )
     return (
         "Agent should provide a complete, specific resolution. Include ownership language ('I will', 'let me'). "
         "Provide actionable next steps with temporal anchors ('by tomorrow', 'within 24 hours'). "
         "Reference the customer's specific issue directly."
     )
+
+
+def _resolution_target_for_index(i: int) -> str:
+    """Return the resolution target for conversation index i in a 3-way rotation."""
+    _CYCLE = ["weak", "guided", "strong"]
+    return _CYCLE[i % 3]
 
 
 def _prose_directive_for_brand_voice(target: str, variant: str) -> str:
@@ -403,7 +418,7 @@ class QualityPlanInjector:
         for i in range(per_dim):
             schedule.append({"type": "empathy", "target": "low" if i % 2 == 0 else "high"})
         for i in range(per_dim):
-            schedule.append({"type": "resolution", "target": "weak" if i % 2 == 0 else "strong"})
+            schedule.append({"type": "resolution", "target": _resolution_target_for_index(i)})
         for i in range(per_dim):
             schedule.append({"type": "brand_voice", "target": "off_brand" if i % 2 == 0 else "on_brand"})
 

@@ -72,7 +72,7 @@ def validate_resolution(signals: ResolutionSignals, target: str) -> DimensionVer
     """
     Validate resolution dimension against target.
 
-    Targets: "weak" | "strong"
+    Targets: "weak" | "strong" | "guided"
 
     For target "weak":
         - solution_provided MUST be False OR resolution_blocked MUST be True
@@ -80,9 +80,15 @@ def validate_resolution(signals: ResolutionSignals, target: str) -> DimensionVer
     For target "strong":
         - solution_provided MUST be True
         - solution_type MUST be "complete"
-        - next_steps_actionable MUST be True
+        - (next_steps_actionable OR already_resolved) MUST be True
         - ownership_language_present MUST be True
         - deflection_present MUST be False
+
+    For target "guided":
+        - solution_provided MUST be True
+        - solution_type MUST be "complete"
+        - deflection_present MUST be False
+        - No ownership or temporal anchor requirement (customer drives execution)
     """
     if target == "resolution:weak" or target == "weak":
         passed = (
@@ -93,9 +99,16 @@ def validate_resolution(signals: ResolutionSignals, target: str) -> DimensionVer
         passed = (
             signals.solution_provided and
             signals.solution_type == "complete" and
-            signals.next_steps_actionable and
+            (signals.next_steps_actionable or signals.already_resolved) and
             signals.ownership_language_present and
             not signals.deflection_present
+        )
+    elif target == "resolution:guided" or target == "guided":
+        passed = (
+            signals.solution_provided and
+            signals.solution_type == "complete" and
+            not signals.deflection_present
+            # no ownership or temporal anchor requirement — customer drives execution
         )
     else:
         return DimensionVerdict(
@@ -113,6 +126,7 @@ def validate_resolution(signals: ResolutionSignals, target: str) -> DimensionVer
             "solution_provided": signals.solution_provided,
             "solution_type": signals.solution_type,
             "next_steps_actionable": signals.next_steps_actionable,
+            "already_resolved": signals.already_resolved,
             "ownership_language_present": signals.ownership_language_present,
             "deflection_present": signals.deflection_present,
             "resolution_blocked": signals.resolution_blocked,

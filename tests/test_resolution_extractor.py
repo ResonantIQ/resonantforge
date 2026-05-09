@@ -32,6 +32,8 @@ def _extract(agent_prose: str, customer_prose: str = "") -> object:
         specific_actor_patterns=saas_lex.SPECIFIC_ACTOR_PATTERNS,
         ownership_patterns=saas_lex.OWNERSHIP_PATTERNS,
         issue_keywords=saas_lex.ISSUE_KEYWORDS,
+        completion_verb_patterns=saas_lex.COMPLETION_VERB_PATTERNS,
+        completion_resolution_patterns=saas_lex.COMPLETION_RESOLUTION_PATTERNS,
     )
 
 

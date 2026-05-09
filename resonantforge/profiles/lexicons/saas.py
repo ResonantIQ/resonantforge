@@ -1,4 +1,5 @@
 """Curated lexicons for the SaaS conversation profile."""
+import re
 
 # ============================================================
 # EMPATHY LEXICON
@@ -129,11 +130,29 @@ ACTION_VERB_LEXICON = [
 # RESOLUTION LEXICON
 # ============================================================
 
-# Patterns indicating a solution has been provided (regex patterns)
-RESOLUTION_PATTERNS = [
+# Verb stems that, when preceded by \bi'?ve\s+, signal a completed action.
+# Used by _already_resolved() in the resolution extractor, AND by
+# COMPLETION_RESOLUTION_PATTERNS so that solution_provided fires for all
+# completion verbs — not just "fixed".
+COMPLETION_VERB_PATTERNS = [
+    "fixed", "resolved", "updated", "applied", "corrected",
+    "pushed", "deployed", "patched", "removed", "added",
+    "reset", "changed", "adjusted", "rebuilt", "cleared",
+    "sent", "issued", "processed", "created",
+]
+
+# Dynamic alternation built from COMPLETION_VERB_PATTERNS so that adding a
+# verb to the list above automatically extends both _already_resolved detection
+# and solution_provided triggering.
+_COMPLETION_VERB_ALT = "|".join(re.escape(v) for v in COMPLETION_VERB_PATTERNS)
+
+# Completion-oriented subset of RESOLUTION_PATTERNS.
+# Only patterns in this list can trigger the pronoun-reference fallback
+# in _classify_solution_type() — investigative I'll-verbs are excluded.
+COMPLETION_RESOLUTION_PATTERNS = [
     r"\byou can\b",
     r"\bwe'?ve\b",
-    r"\bi'?ve fixed\b",
+    rf"\bi'?ve\s+(?:{_COMPLETION_VERB_ALT})\b",  # covers all completion verbs
     r"\bhere'?s how\b",
     r"\bto resolve\b",
     r"\bthe solution\b",
@@ -155,6 +174,20 @@ RESOLUTION_PATTERNS = [
     r"\bcopy (?:the |that )\b",
     r"\bpaste (?:it|that|the)\b",
     r"\bwhat you need to do\b",
+    # Escalation / routing — completion actions (agent routes to resolution)
+    r"\bi'?m (?:escalating|routing|transferring)\b",
+    r"\bi'?ll (?:fix|update|resolve|escalate|loop in|bring in)\b",
+    r"\bescalating this\b",
+    r"\bour (?:engineering|billing|technical|infrastructure) team\b.{0,40}\bwill\b",
+]
+
+# Full resolution pattern set — includes COMPLETION_RESOLUTION_PATTERNS plus
+# investigative I'll-verbs that set solution_provided=True but are NOT
+# completion-oriented (excluded from pronoun-reference fallback).
+# NOTE: \byou should\b removed (RFORGE-43 — matched vague promises)
+# NOTE: dig in included alongside dig into (must match "I'll dig in tomorrow")
+RESOLUTION_PATTERNS = COMPLETION_RESOLUTION_PATTERNS + [
+    r"\bi'?ll (?:look into|dig into|dig in|investigate|check)\b",
 ]
 
 # Patterns indicating deflection without help
@@ -222,6 +255,10 @@ OWNERSHIP_PATTERNS = [
     r"\bi'?m taking\b",
     r"\bmy responsibility\b",
     r"\bi'?m on it\b",
+    # RFORGE-6: explicit I'll-action and escalation patterns
+    r"\bi'?ll (?:fix|update|resolve|look into|dig into|dig in|investigate|check)\b",
+    r"\bi'?m (?:escalating|routing|transferring)\b",
+    r"\bi'?ve (?:already|just|now)\b",
 ]
 
 # Issue keyword overlap — terms that appear in customer descriptions of their issue.

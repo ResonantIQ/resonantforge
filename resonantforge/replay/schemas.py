@@ -36,6 +36,8 @@ class EnvelopeLexicons(BaseModel):
     specific_actor_patterns: list[str] = Field(default_factory=list)
     ownership_patterns: list[str] = Field(default_factory=list)
     issue_keywords: list[str] = Field(default_factory=list)
+    completion_verb_patterns: list[str] = Field(default_factory=list)
+    completion_resolution_patterns: list[str] = Field(default_factory=list)
 
     # Brand voice extractor
     hedging_lexicon: list[str] = Field(default_factory=list)

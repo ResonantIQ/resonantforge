@@ -196,6 +196,8 @@ def replay_one(envelope: ReplayEnvelope, labels: ReplayLabels) -> ReplayResult:
         specific_actor_patterns=lex.specific_actor_patterns,
         ownership_patterns=lex.ownership_patterns,
         issue_keywords=lex.issue_keywords,
+        completion_verb_patterns=lex.completion_verb_patterns,
+        completion_resolution_patterns=lex.completion_resolution_patterns,
     )
 
     # 3. Brand voice — deterministic extractor

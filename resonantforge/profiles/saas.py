@@ -361,6 +361,12 @@ class SaaSProfile(Profile):
     def issue_keywords(self) -> list[str]:
         return saas_lex.ISSUE_KEYWORDS
 
+    def completion_verb_patterns(self) -> list[str]:
+        return saas_lex.COMPLETION_VERB_PATTERNS
+
+    def completion_resolution_patterns(self) -> list[str]:
+        return saas_lex.COMPLETION_RESOLUTION_PATTERNS
+
     def synonym_map(self) -> dict[str, str]:
         return saas_lex.SYNONYM_MAP
 

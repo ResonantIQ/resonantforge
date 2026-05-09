@@ -101,6 +101,8 @@ def _minimal_lexicons() -> EnvelopeLexicons:
         specific_actor_patterns=["our team"],
         ownership_patterns=["I'll handle"],
         issue_keywords=["issue"],
+        completion_verb_patterns=["fixed"],
+        completion_resolution_patterns=[r"\bi'?ve fixed\b"],
         synonym_map={"reimburse": "refund"},
     )
 
@@ -433,3 +435,62 @@ def test_kb_version_chunk_content_hash_is_stable(tmp_path: Path) -> None:
     h2 = compute_kb_version(list(reversed(chunks)))  # order-independent
     assert h1 == h2
     assert len(h1) == 64  # SHA-256 hex digest
+
+
+# ── RFORGE-6: LexiconsBundle carries completion_verb/resolution_patterns ──────
+
+
+def test_lexicons_bundle_has_completion_verb_patterns():
+    """LexiconsBundle must have completion_verb_patterns field."""
+    from resonantforge.pipeline import LexiconsBundle
+    bundle = LexiconsBundle.__dataclass_fields__ if hasattr(LexiconsBundle, '__dataclass_fields__') else LexiconsBundle.model_fields
+    assert "completion_verb_patterns" in bundle, (
+        "LexiconsBundle must have completion_verb_patterns field"
+    )
+
+
+def test_lexicons_bundle_has_completion_resolution_patterns():
+    """LexiconsBundle must have completion_resolution_patterns field."""
+    from resonantforge.pipeline import LexiconsBundle
+    bundle = LexiconsBundle.__dataclass_fields__ if hasattr(LexiconsBundle, '__dataclass_fields__') else LexiconsBundle.model_fields
+    assert "completion_resolution_patterns" in bundle, (
+        "LexiconsBundle must have completion_resolution_patterns field"
+    )
+
+
+def test_load_lexicons_populates_completion_verb_patterns():
+    """_load_lexicons must populate completion_verb_patterns from profile."""
+    from resonantforge.pipeline import _load_lexicons
+    from resonantforge.profiles.saas import SaaSProfile
+    bundle = _load_lexicons(SaaSProfile())
+    assert isinstance(bundle.completion_verb_patterns, list)
+    assert len(bundle.completion_verb_patterns) > 0
+
+
+def test_load_lexicons_populates_completion_resolution_patterns():
+    """_load_lexicons must populate completion_resolution_patterns from profile."""
+    from resonantforge.pipeline import _load_lexicons
+    from resonantforge.profiles.saas import SaaSProfile
+    bundle = _load_lexicons(SaaSProfile())
+    assert isinstance(bundle.completion_resolution_patterns, list)
+    assert len(bundle.completion_resolution_patterns) > 0
+
+
+def test_envelope_lexicons_has_completion_verb_patterns():
+    """EnvelopeLexicons must have completion_verb_patterns field."""
+    from resonantforge.replay.schemas import EnvelopeLexicons
+    lex = EnvelopeLexicons()
+    assert hasattr(lex, "completion_verb_patterns"), (
+        "EnvelopeLexicons must have completion_verb_patterns"
+    )
+    assert isinstance(lex.completion_verb_patterns, list)
+
+
+def test_envelope_lexicons_has_completion_resolution_patterns():
+    """EnvelopeLexicons must have completion_resolution_patterns field."""
+    from resonantforge.replay.schemas import EnvelopeLexicons
+    lex = EnvelopeLexicons()
+    assert hasattr(lex, "completion_resolution_patterns"), (
+        "EnvelopeLexicons must have completion_resolution_patterns"
+    )
+    assert isinstance(lex.completion_resolution_patterns, list)

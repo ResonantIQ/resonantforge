@@ -2974,7 +2974,7 @@ def test_resolution_recognizes_imperative_instructions() -> None:
     from resonantforge.profiles.lexicons.saas import (
         RESOLUTION_PATTERNS, DEFLECTION_PATTERNS, NEXT_STEPS_PATTERNS,
         TEMPORAL_ANCHOR_PATTERNS, SPECIFIC_ACTOR_PATTERNS, OWNERSHIP_PATTERNS,
-        ISSUE_KEYWORDS,
+        ISSUE_KEYWORDS, COMPLETION_VERB_PATTERNS, COMPLETION_RESOLUTION_PATTERNS,
     )
 
     prose = "You'll want to go to Settings and update your configuration there."
@@ -2988,6 +2988,8 @@ def test_resolution_recognizes_imperative_instructions() -> None:
         specific_actor_patterns=SPECIFIC_ACTOR_PATTERNS,
         ownership_patterns=OWNERSHIP_PATTERNS,
         issue_keywords=ISSUE_KEYWORDS,
+        completion_verb_patterns=COMPLETION_VERB_PATTERNS,
+        completion_resolution_patterns=COMPLETION_RESOLUTION_PATTERNS,
     )
     assert signals.solution_provided is True, (
         "Assertion 36e — \"you'll want to go to\" should produce solution_provided=True; "
@@ -3008,7 +3010,7 @@ def test_resolution_recognizes_hyphenated_temporal_range() -> None:
     from resonantforge.profiles.lexicons.saas import (
         RESOLUTION_PATTERNS, DEFLECTION_PATTERNS, NEXT_STEPS_PATTERNS,
         TEMPORAL_ANCHOR_PATTERNS, SPECIFIC_ACTOR_PATTERNS, OWNERSHIP_PATTERNS,
-        ISSUE_KEYWORDS,
+        ISSUE_KEYWORDS, COMPLETION_VERB_PATTERNS, COMPLETION_RESOLUTION_PATTERNS,
     )
 
     # next_steps_present requires a NEXT_STEPS_PATTERNS match; "within \d+" already
@@ -3024,6 +3026,8 @@ def test_resolution_recognizes_hyphenated_temporal_range() -> None:
         specific_actor_patterns=SPECIFIC_ACTOR_PATTERNS,
         ownership_patterns=OWNERSHIP_PATTERNS,
         issue_keywords=ISSUE_KEYWORDS,
+        completion_verb_patterns=COMPLETION_VERB_PATTERNS,
+        completion_resolution_patterns=COMPLETION_RESOLUTION_PATTERNS,
     )
     assert signals.next_steps_actionable is True, (
         "Assertion 36f — 'within 10-15 minutes' should produce next_steps_actionable=True; "

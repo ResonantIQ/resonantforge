@@ -6,6 +6,11 @@ Per Section 5.1 implementation-grade signal schema.
 import re
 from resonantforge.schemas import ResolutionSignals
 
+_PRONOUN_REFS = re.compile(
+    r"\b(?:this|it|the issue|your case|the problem|your issue|the ticket)\b",
+    re.IGNORECASE,
+)
+
 
 def _regex_any(text: str, patterns: list[str]) -> bool:
     """Return True if any pattern matches (case-insensitive)."""
@@ -19,11 +24,19 @@ def _regex_matches_list(text: str, patterns: list[str]) -> list[str]:
     return [p for p in patterns if re.search(p, text_lower)]
 
 
+def _already_resolved(agent_prose: str, completion_verb_patterns: list[str]) -> bool:
+    """Return True if agent used first-person past-tense completion language."""
+    alt = "|".join(re.escape(v) for v in completion_verb_patterns)
+    pattern = rf"\bi'?ve\s+(?:{alt})\b"
+    return bool(re.search(pattern, agent_prose, re.IGNORECASE))
+
+
 def _classify_solution_type(
     agent_prose: str,
     customer_prose: str,
     resolution_patterns: list[str],
     issue_keywords: list[str],
+    completion_resolution_patterns: list[str],
 ) -> str:
     """
     Classify solution type: complete | partial | none
@@ -41,10 +54,18 @@ def _classify_solution_type(
         agent_lower = agent_prose.lower()
         issue_kw_in_customer = [kw for kw in issue_keywords if kw in customer_lower]
         if issue_kw_in_customer:
-            # Check if any of those keywords also appear in the agent response
             referenced_in_agent = [kw for kw in issue_kw_in_customer if kw in agent_lower]
             if referenced_in_agent:
                 return "complete"
+
+            # Pronoun-reference fallback: agent used pronoun proxy instead of repeating issue noun
+            if _PRONOUN_REFS.search(agent_prose):
+                completion_match = any(
+                    re.search(p, agent_prose, re.IGNORECASE)
+                    for p in completion_resolution_patterns
+                )
+                if completion_match:
+                    return "complete"
 
     return "partial"
 
@@ -77,6 +98,8 @@ def extract_resolution_signals(
     specific_actor_patterns: list[str],
     ownership_patterns: list[str],
     issue_keywords: list[str],
+    completion_verb_patterns: list[str],
+    completion_resolution_patterns: list[str],
 ) -> ResolutionSignals:
     """
     Extract resolution signals from conversation prose.
@@ -84,34 +107,40 @@ def extract_resolution_signals(
     Args:
         agent_prose: agent turns concatenated
         customer_prose: customer turns concatenated (for issue keyword detection)
+        completion_verb_patterns: verb stems for already_resolved detection
+        completion_resolution_patterns: completion-oriented subset for pronoun fallback
         All other args: from profile lexicon
     """
     # 1. Solution provided
     solution_provided = _regex_any(agent_prose, resolution_patterns)
 
-    # 2. Solution type
+    # 2. Already resolved (fait accompli — agent completed the fix)
+    already_resolved = _already_resolved(agent_prose, completion_verb_patterns)
+
+    # 3. Solution type
     solution_type = _classify_solution_type(
-        agent_prose, customer_prose, resolution_patterns, issue_keywords
+        agent_prose, customer_prose, resolution_patterns, issue_keywords,
+        completion_resolution_patterns,
     )
 
-    # 3. Next steps present
+    # 4. Next steps present
     next_steps_present = _regex_any(agent_prose, next_steps_patterns)
 
-    # 4. Next steps actionable (temporal anchor OR specific actor)
+    # 5. Next steps actionable (temporal anchor OR specific actor)
     has_temporal = _regex_any(agent_prose, temporal_anchor_patterns)
     has_specific_actor = _regex_any(agent_prose, specific_actor_patterns)
     next_steps_actionable = next_steps_present and (has_temporal or has_specific_actor)
 
-    # 5. Ownership language
+    # 6. Ownership language
     ownership_matches = _regex_matches_list(agent_prose, ownership_patterns)
     ownership_language_present = len(ownership_matches) > 0
 
-    # 6. Deflection present (without substantive help)
+    # 7. Deflection present (without substantive help)
     deflection_present = _check_deflection_without_help(
         agent_prose, deflection_patterns, resolution_patterns
     )
 
-    # 7. Resolution blocked (derived)
+    # 8. Resolution blocked (derived)
     resolution_blocked = not solution_provided and deflection_present
 
     return ResolutionSignals(
@@ -123,4 +152,5 @@ def extract_resolution_signals(
         ownership_phrases=ownership_matches,
         deflection_present=deflection_present,
         resolution_blocked=resolution_blocked,
+        already_resolved=already_resolved,
     )
