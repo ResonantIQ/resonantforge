@@ -158,7 +158,7 @@ def test_claim_extraction_failure_produces_claim_extraction_verdict_not_accuracy
         brand_voice_signals=None,
         accuracy_signals=accuracy_signals,
         rubric_targets=rubric_targets,
-        brand_voice_variant_id="bv_baseline",
+        brand_voice_variant_id="bv_warm_exploratory",
         feature_profiles={},
     )
 

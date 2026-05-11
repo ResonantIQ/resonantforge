@@ -179,11 +179,10 @@ class SaaSProfile(Profile):
 
     def brand_voice_variants(self) -> list[BrandVoiceVariant]:
         """
-        Return the three SaaS brand voice variants.
+        Return the two SaaS brand voice variants.
 
         - bv_warm_exploratory: warm, curious, collaborative — exercises high empathy + question_count signal
         - bv_direct_clinical: precise, efficient, formal — exercises low empathy + directive_terms signal
-        - bv_baseline: neutral professional — used as the control condition
         """
         return [
             BrandVoiceVariant(
@@ -219,17 +218,6 @@ class SaaSProfile(Profile):
                     "we act on the most reasonable interpretation of the customer's request."
                 ),
                 feature_profile=saas_lex.BRAND_VOICE_FEATURE_PROFILES.get("bv_direct_clinical"),
-            ),
-            BrandVoiceVariant(
-                id="bv_baseline",
-                label="Brand-voice-agnostic baseline",
-                content=(
-                    "Write in a professional, helpful customer service voice. Be clear and accurate. "
-                    "Acknowledge the customer's situation appropriately. Provide complete, actionable responses. "
-                    "Match the formality level to the channel (chat is more casual than email). "
-                    "No specific brand voice constraints — optimize for clarity and helpfulness."
-                ),
-                feature_profile=saas_lex.BRAND_VOICE_FEATURE_PROFILES.get("bv_baseline"),
             ),
         ]
 

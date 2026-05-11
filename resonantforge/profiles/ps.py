@@ -110,20 +110,20 @@ class PSProfile(Profile):
         """
         Return the single PS brand voice variant.
 
-        PS uses a single baseline variant — the vocabulary-overfit smoke test does
+        PS uses bv_warm_exploratory as its default — the vocabulary-overfit smoke test does
         not require multiple brand voice conditions to be effective.
         """
         return [
             BrandVoiceVariant(
-                id="bv_baseline",
-                label="Brand-voice-agnostic baseline",
+                id="bv_warm_exploratory",
+                label="Warm and exploratory",
                 content=(
                     "Write in a professional, collaborative consulting voice. Be precise and structured. "
                     "Acknowledge client concerns with appropriate gravitas. Provide clear recommendations "
                     "backed by analysis. Use formal register appropriate to professional services. "
                     "No specific brand voice constraints beyond professionalism."
                 ),
-                feature_profile=ps_lex.BRAND_VOICE_FEATURE_PROFILES.get("bv_baseline"),
+                feature_profile=ps_lex.BRAND_VOICE_FEATURE_PROFILES.get("bv_warm_exploratory"),
             ),
         ]
 

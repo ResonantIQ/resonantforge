@@ -1,15 +1,11 @@
 """
-Tests for RFORGE-42: bv_baseline directive_range minimum fires false positive
-for non-instructional conversations.
+Tests for brand voice validator on-brand validation.
 
-bv_baseline directive_range was [1, 8], requiring at least 1 directive term.
-The directive lexicon contains UI/instruction verbs (click, check, navigate,
-use, etc.). Consultative conversations with no step-by-step instructions
-naturally produce 0 directive terms — valid on-brand behaviour for bv_baseline,
-which says "provide complete, actionable responses" not "always give step-by-step
-instructions."
+bv_baseline has been removed (RFORGE-9). Two well-separated poles remain:
+bv_warm_exploratory and bv_direct_clinical.
 
-Fix: relax the minimum from 1 to 0 so the range becomes [0, 8].
+This file retains the regression guard for bv_warm_exploratory on-brand validation
+to ensure the brand voice validator handles the dominant variant correctly.
 """
 from __future__ import annotations
 
@@ -21,30 +17,8 @@ from resonantforge.validators.rule_engine import validate_brand_voice
 
 _FEATURE_PROFILES = saas_lex.BRAND_VOICE_FEATURE_PROFILES
 
-# Consultative agent prose with zero directive terms.
-# Sentence length, question count, and hedging all within bv_baseline ranges.
-# No UI-instruction verbs (click, check, navigate, use, go to, …).
-_CONSULTATIVE_PROSE = (
-    "Great question — I'm glad you're thinking ahead about your capacity. "
-    "I'm looking at your account right now and your health score is sitting at 0.92 this month. "
-    "You've got plenty of room under your current plan limits for those new campaigns. "
-    "Doubling your volume is solid growth. "
-    "What kind of scale are we talking about? "
-    "If you can share your growth projections, I can make sure you won't run into constraints. "
-    "I've got availability tomorrow morning between 10 and noon. "
-    "What works best for your schedule?"
-)
-
-# Step-by-step instructional prose with a small number of directive terms (3)
-# that stays within bv_baseline directive_range=[1, 8].
-_INSTRUCTIONAL_PROSE = (
-    "To fix this, navigate to Settings and select the Integrations panel. "
-    "Once there, use the API key shown on screen to update your webhook configuration. "
-    "The connection should clear within a few minutes."
-)
-
 # Warm-exploratory prose with ≥2 hedging terms, ≥1 question, and ≥2 warm terms —
-# all within bv_warm_exploratory ranges. Used for the warm_exploratory regression guard.
+# all within bv_warm_exploratory ranges.
 _WARM_EXPLORATORY_PROSE = (
     "I'm wondering if that might be connected to what you described earlier. "
     "Let's explore a couple of possibilities together — it could be a configuration issue. "
@@ -53,78 +27,20 @@ _WARM_EXPLORATORY_PROSE = (
     "I appreciate you flagging this, and I'm glad we're looking into it together."
 )
 
+# Direct-clinical prose with directive terms, clinical vocabulary, and formal register.
+# Includes ≥2 clinical_terms (confirm, verify, configure, validate) to satisfy aligned_vocabulary check.
+_CLINICAL_PROSE = (
+    "Navigate to Settings and select the Integrations panel. "
+    "Enter the API key and confirm the value matches what was provisioned. "
+    "Click Save to configure your webhook endpoint. "
+    "Verify the connection status in the dashboard and validate that events are received."
+)
 
-# ── RFORGE-42: consultative prose with 0 directive terms passes on_brand ──────
 
-
-def test_bv_baseline_on_brand_passes_with_zero_directive_terms():
+def test_bv_warm_exploratory_on_brand_passes():
     """
-    Consultative prose (no UI instructions) with directive_terms_count=0 must
-    pass on_brand validation against bv_baseline after the range is relaxed to [0, 8].
-    """
-    signals = extract_brand_voice_signals(
-        agent_prose=_CONSULTATIVE_PROSE,
-        hedging_lexicon=saas_lex.HEDGING_LEXICON,
-        directive_lexicon=saas_lex.DIRECTIVE_LEXICON,
-        warm_terms=saas_lex.WARM_TERMS,
-        clinical_terms=saas_lex.CLINICAL_TERMS,
-        contraction_patterns=saas_lex.CONTRACTION_PATTERNS,
-    )
-
-    assert signals.directive_terms_count == 0, (
-        f"Expected 0 directive terms in consultative prose, got {signals.directive_terms_count}: "
-        f"{signals.directive_terms}"
-    )
-
-    verdict = validate_brand_voice(
-        signals=signals,
-        target="on_brand",
-        variant_id="bv_baseline",
-        feature_profiles=_FEATURE_PROFILES,
-    )
-
-    assert verdict.verdict.value == "pass", (
-        f"Consultative prose with 0 directive terms must pass on_brand for bv_baseline "
-        f"after relaxing directive_range minimum to 0. "
-        f"feature_checks={verdict.signals_summary.get('feature_checks')}"
-    )
-
-
-def test_bv_baseline_on_brand_still_passes_with_directive_terms():
-    """
-    Regression guard: instructional prose with directive terms must still pass
-    on_brand validation after the range change.
-    """
-    signals = extract_brand_voice_signals(
-        agent_prose=_INSTRUCTIONAL_PROSE,
-        hedging_lexicon=saas_lex.HEDGING_LEXICON,
-        directive_lexicon=saas_lex.DIRECTIVE_LEXICON,
-        warm_terms=saas_lex.WARM_TERMS,
-        clinical_terms=saas_lex.CLINICAL_TERMS,
-        contraction_patterns=saas_lex.CONTRACTION_PATTERNS,
-    )
-
-    assert signals.directive_terms_count >= 1, (
-        f"Instructional prose should have directive terms, got {signals.directive_terms_count}"
-    )
-
-    verdict = validate_brand_voice(
-        signals=signals,
-        target="on_brand",
-        variant_id="bv_baseline",
-        feature_profiles=_FEATURE_PROFILES,
-    )
-
-    assert verdict.verdict.value == "pass", (
-        f"Instructional prose with directive terms must still pass on_brand for bv_baseline. "
-        f"feature_checks={verdict.signals_summary.get('feature_checks')}"
-    )
-
-
-def test_bv_warm_exploratory_directive_range_unchanged():
-    """
-    Regression guard: bv_warm_exploratory directive_range [0, 3] is unaffected.
-    Warm-exploratory prose with hedging terms must still pass on_brand.
+    Warm-exploratory prose with hedging terms and questions must pass on_brand
+    validation for bv_warm_exploratory.
     """
     signals = extract_brand_voice_signals(
         agent_prose=_WARM_EXPLORATORY_PROSE,
@@ -143,6 +59,33 @@ def test_bv_warm_exploratory_directive_range_unchanged():
     )
 
     assert verdict.verdict.value == "pass", (
-        f"bv_warm_exploratory should not be affected by the bv_baseline fix. "
+        f"Warm-exploratory prose must pass on_brand for bv_warm_exploratory. "
+        f"feature_checks={verdict.signals_summary.get('feature_checks')}"
+    )
+
+
+def test_bv_direct_clinical_on_brand_passes():
+    """
+    Direct-clinical prose with directive terms and formal structure must pass on_brand
+    validation for bv_direct_clinical.
+    """
+    signals = extract_brand_voice_signals(
+        agent_prose=_CLINICAL_PROSE,
+        hedging_lexicon=saas_lex.HEDGING_LEXICON,
+        directive_lexicon=saas_lex.DIRECTIVE_LEXICON,
+        warm_terms=saas_lex.WARM_TERMS,
+        clinical_terms=saas_lex.CLINICAL_TERMS,
+        contraction_patterns=saas_lex.CONTRACTION_PATTERNS,
+    )
+
+    verdict = validate_brand_voice(
+        signals=signals,
+        target="on_brand",
+        variant_id="bv_direct_clinical",
+        feature_profiles=_FEATURE_PROFILES,
+    )
+
+    assert verdict.verdict.value == "pass", (
+        f"Clinical prose must pass on_brand for bv_direct_clinical. "
         f"feature_checks={verdict.signals_summary.get('feature_checks')}"
     )

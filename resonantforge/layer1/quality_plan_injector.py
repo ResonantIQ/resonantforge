@@ -30,7 +30,7 @@ ACCURACY_DISTRIBUTION = [
 ALL_CLEAN_TARGETS = RubricTarget(
     empathy="high",
     resolution="strong",
-    brand_voice_against="bv_baseline",
+    brand_voice_against="bv_warm_exploratory",
     brand_voice_target="on_brand",
     accuracy=AccuracyLabel(status="supported", precision="exact"),
 )
@@ -616,11 +616,11 @@ class QualityPlanInjector:
 
         elif spec["type"] == "brand_voice":
             rubric = RubricTarget(
-                brand_voice_against="bv_baseline",
+                brand_voice_against="bv_warm_exploratory",
                 brand_voice_target=spec["target"],
             )
             citations = KnowledgeCitations()
-            directives = _prose_directive_for_brand_voice(spec["target"], "bv_baseline")
+            directives = _prose_directive_for_brand_voice(spec["target"], "bv_warm_exploratory")
             cat11_gate = None
             multi_chunk = False
             kb_required = []

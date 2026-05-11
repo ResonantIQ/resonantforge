@@ -109,9 +109,9 @@ def _minimal_lexicons() -> EnvelopeLexicons:
 
 def _minimal_bv_config() -> BrandVoiceConfig:
     return BrandVoiceConfig(
-        variant_id="bv_baseline",
+        variant_id="bv_warm_exploratory",
         feature_profiles={
-            "bv_baseline": {
+            "bv_warm_exploratory": {
                 "sentence_length_range": [6, 20],
                 "question_count_range": [0, 4],
                 "hedging_count_range": [0, 2],

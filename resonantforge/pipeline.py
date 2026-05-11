@@ -974,8 +974,8 @@ def _generate_prose_for_chunk(
             else:
                 signals = None
 
-            # OQ2: use brand_voice_against from quality plan, default to bv_baseline.
-            variant_id = quality_plan.rubric_targets.brand_voice_against or "bv_baseline"
+            # OQ2: use brand_voice_against from quality plan, default to bv_warm_exploratory.
+            variant_id = quality_plan.rubric_targets.brand_voice_against or "bv_warm_exploratory"
             feature_profiles = profile.brand_voice_feature_profiles()
 
             validator_verdicts = validate_all_dimensions(
@@ -1304,7 +1304,7 @@ def _run_pipeline_inner(
         injector_cc = CrossContaminationInjector(
             seed=config.seed,
             variants=bv_variants,
-            dominant_variant="bv_baseline" if "bv_baseline" in bv_variants else bv_variants[0],
+            dominant_variant=bv_variants[0],
         )
         kb_chunks = injector_cc.contaminate_kb_chunks(kb_chunks)
         # Re-write chunks.jsonl with the contaminated chunk list so that

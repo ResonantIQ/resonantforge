@@ -480,13 +480,4 @@ BRAND_VOICE_FEATURE_PROFILES: dict[str, dict] = {
         "aligned_terms_min": 2,
         "formality_range": (0.5, 1.0),
     },
-    "bv_baseline": {
-        "sentence_length_range": (6, 20),
-        "question_count_range": (0, 4),
-        "hedging_range": (0, 6),
-        "directive_range": (0, 8),
-        "aligned_term_field": "warm_terms_count",
-        "aligned_terms_min": 0,  # no minimum for baseline
-        "formality_range": (0.3, 0.8),
-    },
 }

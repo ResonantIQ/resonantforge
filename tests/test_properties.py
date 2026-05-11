@@ -979,7 +979,7 @@ def test_variant_id_non_null_for_validated_convs(corpus: tuple[Path, Manifest]) 
     for brand voice validation.
 
     The validation loop uses rubric_targets.brand_voice_against as the brand voice
-    variant ID, defaulting to "bv_baseline" when absent. This property ensures the
+    variant ID, defaulting to "bv_warm_exploratory" when absent. This property ensures the
     effective variant_id passed to validate_all_dimensions is always a non-empty string
     — i.e., brand voice validation always has a calibrated profile to validate against.
     """
@@ -991,7 +991,7 @@ def test_variant_id_non_null_for_validated_convs(corpus: tuple[Path, Manifest]) 
     for plan in plans:
         rubric = plan.get("rubric_targets", {})
         # Mirrors the fallback in _generate_prose_for_chunk.
-        effective_variant_id = rubric.get("brand_voice_against") or "bv_baseline"
+        effective_variant_id = rubric.get("brand_voice_against") or "bv_warm_exploratory"
         if not effective_variant_id:
             violations.append(
                 f"conv_id={plan.get('conversation_id')!r}: "

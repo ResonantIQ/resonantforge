@@ -48,9 +48,9 @@ _LEXICONS = {
 
 # Wide ranges that nearly any prose will satisfy (used for fixtures where brand_voice is not the target)
 _BRAND_VOICE_WIDE = {
-    "variant_id": "bv_baseline",
+    "variant_id": "bv_warm_exploratory",
     "feature_profiles": {
-        "bv_baseline": {
+        "bv_warm_exploratory": {
             "sentence_length_range": [1, 200],
             "question_count_range": [0, 20],
             "hedging_range": [0, 20],
@@ -234,7 +234,7 @@ def _fixture_clean_pass() -> tuple[dict, dict]:
         rubric_targets={
             "empathy": "high",
             "resolution": "strong",
-            "brand_voice_against": "bv_baseline",
+            "brand_voice_against": "bv_warm_exploratory",
             "brand_voice_target": "on_brand",
             "accuracy": {"status": "supported", "precision": "exact"},
         },
