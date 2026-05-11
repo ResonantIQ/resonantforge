@@ -3229,3 +3229,48 @@ def test_manifest_conditional_reroute_fields_present(corpus: tuple[Path, Manifes
         f"conditional_reroute_events length {len(manifest.conditional_reroute_events)} "
         f"!= conditional_reroute_count {manifest.conditional_reroute_count}"
     )
+
+
+def test_declining_accounts_persist_for_at_least_30_days() -> None:
+    """
+    SM5 — DECLINING accounts must remain in DECLINING state for at least 30 days
+    before they can recover to HEALTHY.
+
+    Motivation: with a 7-day recovery threshold, ~48% of DECLINING accounts clear
+    the window and flip back to HEALTHY before generating meaningful conversations,
+    making layer1_signal calibration impossible in --smoke runs. The threshold was
+    raised to 30 days so DECLINING accounts reliably contribute distress-signal
+    conversations to the replay corpus.
+
+    Verified over a 100-account × 6-month run (large enough to include many
+    DECLINING accounts). For every account that starts DECLINING and eventually
+    recovers to HEALTHY, the transition must not happen before day 30.
+    """
+    from resonantforge.layer1.state_machine import StateMachine
+    from resonantforge.profiles import get_profile
+    from resonantforge.schemas import HealthState
+
+    profile = get_profile("saas")
+    sm = StateMachine(seed=_SM_SEED, num_accounts=_SM_LARGE_ACCOUNTS, num_months=6, profile=profile)
+    _, snapshots = sm.simulate()
+
+    from collections import defaultdict
+    snaps_by_account: dict[str, list] = defaultdict(list)
+    for s in snapshots:
+        snaps_by_account[s.account_id].append(s)
+
+    early_recoveries = []
+    for acct_id, snaps in snaps_by_account.items():
+        snaps_sorted = sorted(snaps, key=lambda s: s.day_index)
+        if snaps_sorted[0].health_state != HealthState.DECLINING:
+            continue
+        for s in snaps_sorted:
+            if s.health_state == HealthState.HEALTHY:
+                if s.day_index < 30:
+                    early_recoveries.append((acct_id, s.day_index))
+                break
+
+    assert not early_recoveries, (
+        f"SM5 — {len(early_recoveries)} DECLINING account(s) recovered to HEALTHY "
+        f"before day 30 (recovery threshold too short): {early_recoveries[:5]}"
+    )

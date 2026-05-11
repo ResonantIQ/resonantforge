@@ -548,9 +548,9 @@ class StateMachine:
                     elif (
                         payment_failures_recent == 0
                         and churn_signal_days == 0
-                        and days_in_current_state >= 7
+                        and days_in_current_state >= 30
                     ):
-                        # Recovery: payment healthy and no churn signals for a week
+                        # Recovery: payment healthy and no churn signals for a full month
                         current_health = HealthState.HEALTHY
                         current_stage = LifecycleStage.ACTIVE
                         days_in_current_state = 0
