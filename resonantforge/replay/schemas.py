@@ -94,6 +94,18 @@ class EnvelopeMetadata(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Layer 1 health context (RFORGE-21)
+# ---------------------------------------------------------------------------
+
+
+class PlantedHealthContext(BaseModel):
+    """Frozen Layer 1 health state and churn signals for the account at conversation time."""
+
+    health_state: str
+    churn_signals: list[dict] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
 # Top-level envelope
 # ---------------------------------------------------------------------------
 
@@ -116,6 +128,7 @@ class ReplayEnvelope(BaseModel):
     brand_voice: BrandVoiceConfig
     validator_inputs: ValidatorInputs = Field(default_factory=ValidatorInputs)
     metadata: EnvelopeMetadata
+    planted_health_context: Optional[PlantedHealthContext] = None
 
     @field_validator("schema_version")
     @classmethod
@@ -152,7 +165,7 @@ VALID_TAGS = frozenset({
     "skipped_during_generation",
 })
 
-REQUIRED_FAILURE_KEYS = frozenset({"accuracy", "empathy", "resolution", "brand_voice", "claim_extraction"})
+REQUIRED_FAILURE_KEYS = frozenset({"accuracy", "empathy", "resolution", "brand_voice", "claim_extraction", "layer1_signal"})
 
 
 class ReplayLabels(BaseModel):

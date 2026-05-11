@@ -34,6 +34,7 @@ def _make_labels(expected_outcome: str, expected_failures: dict) -> ReplayLabels
             "resolution": False,
             "brand_voice": False,
             "claim_extraction": False,
+            "layer1_signal": False,
             **expected_failures,
         },
         confidence="high",

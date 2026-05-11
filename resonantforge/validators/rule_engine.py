@@ -6,6 +6,7 @@ No LLM in the gating path. Per Section 5.1.2.
 from __future__ import annotations
 from resonantforge.schemas import (
     EmpathySignals, ResolutionSignals, BrandVoiceSignals, AccuracySignals,
+    Layer1SignalSignals,
     DimensionVerdict, ValidationVerdict, AccuracyLabel
 )
 from resonantforge.validators.extractors.brand_voice import brand_voice_feature_profile
@@ -282,6 +283,35 @@ def validate_accuracy(signals: AccuracySignals, target: AccuracyLabel) -> Dimens
             "multi_chunk_satisfied": signals.multi_chunk_satisfied,
             "claim_count": len(signals.claims),
         },
+    )
+
+
+def validate_layer1_signal(signals: Layer1SignalSignals) -> DimensionVerdict:
+    """
+    Validate layer1_signal dimension.
+
+    DECLINING/CRITICAL → PASS when distress_signals_present, FAIL otherwise.
+    HEALTHY/CHURNED → SKIP (signal not expected; validator is neutral).
+    """
+    summary = {
+        "health_state": signals.health_state,
+        "signal_expected": signals.signal_expected,
+        "distress_signals_present": signals.distress_signals_present,
+        "distress_terms": signals.distress_terms,
+        "max_signal_strength": signals.max_signal_strength,
+    }
+    if not signals.signal_expected:
+        return DimensionVerdict(
+            dimension="layer1_signal",
+            verdict=ValidationVerdict.SKIP,
+            target=signals.health_state,
+            signals_summary=summary,
+        )
+    return DimensionVerdict(
+        dimension="layer1_signal",
+        verdict=ValidationVerdict.PASS if signals.distress_signals_present else ValidationVerdict.FAIL,
+        target=signals.health_state,
+        signals_summary=summary,
     )
 
 

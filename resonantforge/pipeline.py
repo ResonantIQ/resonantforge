@@ -1119,6 +1119,7 @@ def _generate_prose_for_chunk(
             _lexicons_from_profile,
             write_single_envelope,
         )
+        from resonantforge.replay.schemas import PlantedHealthContext  # noqa: PLC0415
         assert prose is not None
         _ap, _cp = (
             (_envelope_agent_prose, _envelope_customer_prose)
@@ -1135,6 +1136,24 @@ def _generate_prose_for_chunk(
             prose_generation_directives="(organic — no quality plan)",
             kb_chunks_required=[],
         )
+        _health_ctx: PlantedHealthContext | None = None
+        if account_snapshot is not None:
+            _churn_signals = [
+                {
+                    "signal_type": e.payload.get("signal_type", ""),
+                    "strength": float(e.payload.get("strength", 0.0)),
+                }
+                for e in account_events
+                if (
+                    e.event_type == SimEventType.CHURN_SIGNAL_DETECTED
+                    and e.account_id == account_id
+                    and e.month_index == month_index
+                )
+            ]
+            _health_ctx = PlantedHealthContext(
+                health_state=account_snapshot.health_state.value,
+                churn_signals=_churn_signals,
+            )
         write_single_envelope(
             output_dir=replay_corpus_dir / conv_id,
             conv_id=conv_id,
@@ -1148,6 +1167,7 @@ def _generate_prose_for_chunk(
             pipeline_version=pipeline_version,
             kb_version=kb_version,
             source_corpus=str(corpus_dir) if corpus_dir else "",
+            planted_health_context=_health_ctx,
         )
 
     return _make_conversation_record(

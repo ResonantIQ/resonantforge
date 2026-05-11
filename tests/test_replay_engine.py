@@ -125,7 +125,7 @@ class TestLoadLabels:
             "expected_outcome": "pass",
             "expected_failures": {
                 "accuracy": False, "empathy": False, "resolution": False,
-                "brand_voice": False, "claim_extraction": False,
+                "brand_voice": False, "claim_extraction": False, "layer1_signal": False,
             },
             "confidence": "high",
             "tags": ["borderlne"],  # typo — not in closed vocab
@@ -148,7 +148,7 @@ class TestLoadLabels:
             "expected_outcome": "pass",
             "expected_failures": {
                 "accuracy": False, "empathy": False, "resolution": False,
-                "brand_voice": False, "claim_extraction": False,
+                "brand_voice": False, "claim_extraction": False, "layer1_signal": False,
             },
             "confidence": "high",
             "tags": [],
@@ -171,7 +171,7 @@ class TestLoadLabels:
             "expected_outcome": "pass",
             "expected_failures": {
                 "accuracy": False, "empathy": False, "resolution": False,
-                "brand_voice": False, "claim_extraction": False,
+                "brand_voice": False, "claim_extraction": False, "layer1_signal": False,
             },
             "confidence": "high",
             "tags": [],

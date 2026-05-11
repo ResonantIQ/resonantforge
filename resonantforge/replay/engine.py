@@ -40,8 +40,9 @@ from resonantforge.schemas import (
 from resonantforge.validators.extractors.accuracy import run_kb_alignment_pipeline
 from resonantforge.validators.extractors.brand_voice import extract_brand_voice_signals
 from resonantforge.validators.extractors.empathy import extract_empathy_signals
+from resonantforge.validators.extractors.layer1_signal import extract_layer1_signal_signals
 from resonantforge.validators.extractors.resolution import extract_resolution_signals
-from resonantforge.validators.rule_engine import validate_all_dimensions
+from resonantforge.validators.rule_engine import validate_all_dimensions, validate_layer1_signal
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +240,14 @@ def replay_one(envelope: ReplayEnvelope, labels: ReplayLabels) -> ReplayResult:
         brand_voice_variant_id=bv_variant,
         feature_profiles=bv_profiles,
     )
+
+    # 5b. Layer 1 signal — deterministic, no lexicons needed.
+    if envelope.planted_health_context is not None:
+        layer1_signals = extract_layer1_signal_signals(
+            customer_prose=envelope.customer_prose,
+            planted_health_context=envelope.planted_health_context,
+        )
+        dimension_verdicts.append(validate_layer1_signal(layer1_signals))
 
     # 6. Overall outcome: FAIL if any dimension failed; PASS otherwise
     overall_outcome: str = "pass"

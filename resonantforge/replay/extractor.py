@@ -21,6 +21,7 @@ from resonantforge.replay.schemas import (
     EnvelopeLexicons,
     EnvelopeMetadata,
     ExtractionMeta,
+    PlantedHealthContext,
     ReplayEnvelope,
     ValidatorInputs,
 )
@@ -162,6 +163,7 @@ def _write_label_template(
             "resolution": False,
             "brand_voice": False,
             "claim_extraction": False,
+            "layer1_signal": False,
         },
         "confidence": "low",
         "tags": tags,
@@ -188,6 +190,7 @@ def write_single_envelope(
     source_corpus: str,
     extraction_timestamp: str | None = None,
     skipped_during_generation: bool = False,
+    planted_health_context: "PlantedHealthContext | None" = None,
 ) -> None:
     """
     Write a single replay envelope and labels.json template to disk.
@@ -257,6 +260,7 @@ def write_single_envelope(
                 extraction_timestamp=ts,
                 skipped_during_generation=skipped_during_generation,
             ),
+            planted_health_context=planted_health_context,
         )
 
         output_dir.mkdir(parents=True, exist_ok=True)

@@ -203,6 +203,7 @@ def _labels(
             "resolution": False,
             "brand_voice": False,
             "claim_extraction": False,
+            "layer1_signal": False,
             **expected_failures,
         },
         "confidence": confidence,

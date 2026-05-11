@@ -438,6 +438,16 @@ class AccuracySignals(BaseModel):
     multi_chunk_satisfied: bool
 
 
+class Layer1SignalSignals(BaseModel):
+    """Signals from the layer1_signal dimension validator (RFORGE-21)."""
+
+    health_state: str
+    signal_expected: bool
+    distress_signals_present: bool
+    distress_terms: list[str]
+    max_signal_strength: float
+
+
 class ConversationSignals(BaseModel):
     """
     Full set of extracted signals for a single conversation, keyed by dimension.
