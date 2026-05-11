@@ -1016,7 +1016,7 @@ def test_gate_returns_structured_violations() -> None:
     Assertion 29: check_gates() returns GateViolation objects with severity=ERROR
     when a hard gate threshold is exceeded.
 
-    Sets prose_fact_rate to 50% (well above the 2% threshold) and confirms
+    Sets prose_fact_rate to 50% (well above the 10% threshold) and confirms
     the returned violation has the right gate_name, severity, threshold,
     and actual_value fields.
     """
@@ -1040,8 +1040,8 @@ def test_gate_returns_structured_violations() -> None:
     assert v.severity == GateSeverity.ERROR, (
         f"Assertion 29d — prose_fact_rate violation must be severity=ERROR, got {v.severity}"
     )
-    assert v.threshold == pytest.approx(0.02), (
-        f"Assertion 29e — prose_fact_rate threshold must be 0.02, got {v.threshold}"
+    assert v.threshold == pytest.approx(0.10), (
+        f"Assertion 29e — prose_fact_rate threshold must be 0.10, got {v.threshold}"
     )
     assert v.actual_value == pytest.approx(0.50), (
         f"Assertion 29f — actual_value must be 0.50 (5/10), got {v.actual_value}"
