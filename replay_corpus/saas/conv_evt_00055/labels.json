@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00055",
+  "label_version": 1,
+  "labeled_at": "FILL_IN",
+  "labeled_by": "tj",
+  "expected_outcome": "uncertain",
+  "expected_failures": {
+    "accuracy": false,
+    "empathy": false,
+    "resolution": false,
+    "brand_voice": false,
+    "claim_extraction": false,
+    "layer1_signal": false
+  },
+  "confidence": "low",
+  "tags": [],
+  "rationale": "FILL_IN",
+  "revised_from": null,
+  "revision_notes": null
+}

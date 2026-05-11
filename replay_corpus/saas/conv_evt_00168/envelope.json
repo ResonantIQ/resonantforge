@@ -1,0 +1,2335 @@
+{
+  "schema_version": 1,
+  "conv_id": "conv_evt_00168",
+  "agent_prose": "Hi there! Thanks for reaching out. I'd be happy to help you review your plan. Let me pull up your account details real quick.\nPerfect question. So with the Growth plan at $499/month, you get up to 10 seats included, which means you're well within that limit and not paying anything extra for those 8 seats. You only start incurring additional charges if you go beyond the 10 included seats, and each extra seat would be $49/month.\nGreat question. The Growth plan comes with 50,000 API credits per month. I don't have your exact usage in front of me right this second, but I can definitely check that for you. What I can tell you is that your account health score is looking really strong at 0.89 this month, which suggests your overall usage is in a healthy range. Would you like me to pull your detailed API credit usage to see exactly where you stand?\nAbsolutely, that's smart planning. Based on your usage patterns and that strong health score, you should be in good shape. If you do find you're approaching the limit and need more credits, we can always discuss upgrade options. Is there anything else about your Growth plan I can clarify for you today?\nYou're very welcome! We appreciate you being a valued customer, and feel free to reach out anytime you have questions. Have a great rest of your day!",
+  "customer_prose": "Hi, I'm trying to understand our current plan setup. We're on the Growth plan but I want to make sure we're not paying for more seats than we actually need.\nGreat, thanks. We currently have 8 seats and I'm wondering if we're being charged for all of them or if there's flexibility there.\nOh nice! So we're not overpaying at all right now. What about our API credits? Are we close to the monthly limit?\nYeah, that would be helpful actually. I want to make sure we have enough buffer for next month's projects.\nNo, I think that covers it. This was really helpful\u2014thanks for walking me through everything!",
+  "quality_plan": {
+    "conversation_id": "conv_evt_00168",
+    "trigger_event_id": "evt_00168",
+    "rubric_targets": {
+      "empathy": "high",
+      "resolution": "strong",
+      "brand_voice_against": "bv_baseline",
+      "brand_voice_target": "on_brand",
+      "accuracy": {
+        "status": "supported",
+        "precision": "exact"
+      }
+    },
+    "knowledge_citations": {
+      "should_cite": [
+        "kb_chunk_growth_plan_pricing_v2"
+      ],
+      "must_not_cite": []
+    },
+    "coaching_target_dimension": "empathy",
+    "prose_generation_directives": "Write a model customer service interaction. Agent should be empathetic, resolve the issue completely, write on-brand, and make accurate claims supported by the knowledge base.\n\nRelevant KB policy content:\n---\n[kb_chunk_growth_plan_pricing_v2]\nGrowth plan: $499/month, includes up to 10 seats and 50,000 API credits per month. Additional seats are $49/month each, prorated for mid-cycle additions.\n---",
+    "cat11_gate": null,
+    "multi_chunk_required": false,
+    "kb_chunks_required": [
+      "kb_chunk_growth_plan_pricing_v2"
+    ],
+    "planted_constraint": null,
+    "planted_contradiction": null,
+    "target_branch": null
+  },
+  "kb_chunks": [
+    {
+      "chunk_id": "kb_chunk_refund_allow_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "Refunds are available within 30 days of purchase for all paid plan customers. Eligible customers receive a full refund to the original payment method within 5-7 business days of an approved request.",
+      "constraint_type": "allow_condition",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_8",
+      "tone_variant": null,
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "refund_window_days": 30,
+        "plan_eligible": "paid",
+        "processing_days_min": 5,
+        "processing_days_max": 7
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_deny_usage_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "Refunds are NOT available if the account has consumed more than 100 API credits during the billing period in question, regardless of how recently the purchase was made.",
+      "constraint_type": "deny_condition",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_8",
+      "tone_variant": "bv_direct_clinical",
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "refund_denied_if_api_credits_exceeded": 100
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_cancellation_allow_v1",
+      "document_id": "doc_cancellation_policy_v1",
+      "document_path": "policies/cancellation_policy.md",
+      "chunk_text": "Paid subscribers may cancel their subscription at any time with no cancellation fee. Access continues through the end of the current billing period.",
+      "constraint_type": "allow_condition",
+      "effective_date": "2025-09-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_8",
+      "tone_variant": null,
+      "domains": [
+        "cancellation"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_cancellation_deny_trial_v1",
+      "document_id": "doc_cancellation_policy_v1",
+      "document_path": "policies/cancellation_policy.md",
+      "chunk_text": "Cancellation is NOT available during an active free trial. Trial accounts must wait until the trial period expires before managing subscription state. Trial accounts that request cancellation will instead be flagged for non-renewal.",
+      "constraint_type": "deny_condition",
+      "effective_date": "2025-09-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_8",
+      "tone_variant": "bv_warm_exploratory",
+      "domains": [
+        "cancellation"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_sla_credit_allow_v2",
+      "document_id": "doc_sla_terms_v2",
+      "document_path": "policies/sla_terms.md",
+      "chunk_text": "Customers are eligible for SLA credits when measured uptime falls below 99.9% in any calendar month. Credits are applied to the next invoice automatically.",
+      "constraint_type": "allow_condition",
+      "effective_date": "2025-06-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_8",
+      "tone_variant": null,
+      "domains": [
+        "sla_credits"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "sla_uptime_threshold_pct": 99.9,
+        "sla_credit_eligible": true
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_sla_deny_maintenance_v2",
+      "document_id": "doc_sla_terms_v2",
+      "document_path": "policies/sla_terms.md",
+      "chunk_text": "Scheduled maintenance windows announced at least 48 hours in advance are explicitly excluded from SLA uptime calculations and do NOT count toward any credit threshold.",
+      "constraint_type": "deny_condition",
+      "effective_date": "2025-06-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_8",
+      "tone_variant": null,
+      "domains": [
+        "sla_credits"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_conditional_plan_type_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "Refund requests within 30 days are self-serve for monthly plan customers via the billing portal. Annual plan customers must contact billing support to initiate a refund; self-serve refund is not available for annual accounts.",
+      "constraint_type": "allow_condition",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_1",
+      "tone_variant": "bv_direct_clinical",
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [
+        {
+          "id": "monthly",
+          "condition": "monthly plan customer",
+          "constraints": [
+            "within 30 days",
+            "billing portal"
+          ],
+          "content": "Refund requests within 30 days are self-serve for monthly plan customers via the billing portal."
+        },
+        {
+          "id": "annual",
+          "condition": "annual plan customer",
+          "constraints": [
+            "billing support"
+          ],
+          "content": "Annual plan customers must contact billing support to initiate a refund; self-serve refund is not available for annual accounts."
+        }
+      ],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_downgrade_conditional_v1",
+      "document_id": "doc_plan_changes_v1",
+      "document_path": "policies/plan_changes.md",
+      "chunk_text": "Plan downgrades take effect at the end of the current billing cycle. However, if a customer has already used features exclusive to the higher tier during the current period, the downgrade is deferred by one additional billing cycle to avoid retroactive access removal.",
+      "constraint_type": "allow_condition",
+      "effective_date": "2025-10-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_1",
+      "tone_variant": "bv_warm_exploratory",
+      "domains": [
+        "subscription_management"
+      ],
+      "intent_tags": [
+        "subscription_downgrade"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_data_export_conditional_v2",
+      "document_id": "doc_data_policy_v2",
+      "document_path": "policies/data_policy.md",
+      "chunk_text": "Data exports are available for all account tiers. Accounts with fewer than 1 million records can export immediately from Settings > Data > Export. Accounts with more than 1 million records must submit an export request and allow up to 48 hours for processing before the file is ready.",
+      "constraint_type": "informational",
+      "effective_date": "2025-08-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_1",
+      "tone_variant": null,
+      "domains": [
+        "data_management"
+      ],
+      "intent_tags": [
+        "data_export_request"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "export_immediate_threshold_records": 1000000,
+        "export_max_wait_hours": 48
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_api_rate_limits_conditional_v3",
+      "document_id": "doc_api_rate_limits_v3",
+      "document_path": "product_docs/api_rate_limits.md",
+      "chunk_text": "API rate limits differ by plan: Starter plans receive 1,000 requests per minute; Enterprise plans receive 10,000 requests per minute. Requests that exceed the limit are queued for up to 30 seconds before returning a 429 Too Many Requests error. Burst headroom is not available on Starter.",
+      "constraint_type": "informational",
+      "effective_date": "2026-02-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_1",
+      "tone_variant": null,
+      "domains": [
+        "api_and_webhooks"
+      ],
+      "intent_tags": [
+        "api_usage_question"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "rate_limit_standard_per_min": 1000,
+        "rate_limit_enterprise_per_min": 10000
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_seat_licensing_conditional_v2",
+      "document_id": "doc_licensing_v2",
+      "document_path": "policies/licensing.md",
+      "chunk_text": "Additional seats can be added mid-cycle and are prorated for the remaining days in the billing period. Seat removals are not prorated \u2014 removed seats remain accessible until the current cycle ends, and billing adjustment takes effect at the next renewal date.",
+      "constraint_type": "informational",
+      "effective_date": "2025-11-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_1",
+      "tone_variant": "bv_warm_exploratory",
+      "domains": [
+        "subscription_management"
+      ],
+      "intent_tags": [
+        "subscription_upgrade"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_annual_refund_counterintuitive_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "Refunds are available on monthly plans only. Annual plan customers are NOT eligible for monetary refunds. Annual plan customers who wish to discontinue should contact their account manager to discuss plan credit options applicable to future purchases.",
+      "constraint_type": "deny_condition",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": true,
+      "cat11_gate": "gate_2",
+      "tone_variant": null,
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "annual_monetary_refund_eligible": false
+      },
+      "metadata": {
+        "counterintuitive_reason": "Buyers assume annual plans warrant at least a partial refund; this policy explicitly reverses that."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_enterprise_sso_counterintuitive_v1",
+      "document_id": "doc_sso_setup_v1",
+      "document_path": "product_docs/sso_setup.md",
+      "chunk_text": "SSO is configured at the individual user level, not the organization level. Each user must link their SSO provider in Account Settings > Security > Linked Identities. There is no admin-enforced SSO mandate \u2014 admins cannot force SSO for all users.",
+      "constraint_type": "informational",
+      "effective_date": "2025-07-01",
+      "superseded_by": null,
+      "counterintuitive": true,
+      "cat11_gate": "gate_2",
+      "tone_variant": null,
+      "domains": [
+        "account_access"
+      ],
+      "intent_tags": [
+        "account_access_issue"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "sso_enforcement": "per_user_opt_in",
+        "sso_org_level_enforced": false
+      },
+      "metadata": {
+        "counterintuitive_reason": "Enterprise buyers universally expect org-level SSO enforcement; this product requires per-user opt-in."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_priority_support_counterintuitive_v2",
+      "document_id": "doc_support_tiers_v2",
+      "document_path": "policies/support_tiers.md",
+      "chunk_text": "Priority Support (4-hour first-response SLA, dedicated Slack channel) is a paid add-on and is NOT included in the Enterprise plan price. Enterprise customers without the Priority Support add-on receive the same Standard SLAs as Growth plan customers: next-business-day first response.",
+      "constraint_type": "deny_condition",
+      "effective_date": "2025-12-01",
+      "superseded_by": null,
+      "counterintuitive": true,
+      "cat11_gate": "gate_2",
+      "tone_variant": null,
+      "domains": [
+        "billing_and_invoicing"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "priority_support_included_in_enterprise": false,
+        "priority_support_price_monthly_usd": 299
+      },
+      "metadata": {
+        "counterintuitive_reason": "Enterprise customers assume priority support is included; it requires a separate purchase at $299/mo."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_paid_only_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "The 30-day refund window applies to paid plan customers only. Trial conversions are NOT eligible \u2014 the account was never charged for the trial period. The eligibility clock starts at the date of the first paid charge, not the account creation date.",
+      "constraint_type": "allow_condition",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_3",
+      "tone_variant": null,
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "precision_trap": "Agent may say 'refunds available within 30 days' omitting 'paid plans only' and omitting the trial-conversion exclusion."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_data_retention_constrained_v2",
+      "document_id": "doc_data_policy_v2",
+      "document_path": "policies/data_policy.md",
+      "chunk_text": "Customer data is retained for exactly 90 days after account cancellation. After 90 days all data is permanently and irreversibly deleted. There are no extensions to this window, and recovery is not possible after deletion begins.",
+      "constraint_type": "informational",
+      "effective_date": "2025-08-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_3",
+      "tone_variant": null,
+      "domains": [
+        "cancellation",
+        "data_management"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "retention_days_post_cancellation": 90,
+        "data_deletion_after_retention": true
+      },
+      "metadata": {
+        "precision_trap": "Agent may say 'data is retained after cancellation' without specifying the 90-day hard limit and no-recovery consequence."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_sla_uptime_definition_v2",
+      "document_id": "doc_sla_terms_v2",
+      "document_path": "policies/sla_terms.md",
+      "chunk_text": "The platform SLA guarantees 99.9% uptime per calendar month, measured across all production services. Uptime is calculated as (total minutes - downtime minutes) / total minutes.",
+      "constraint_type": "informational",
+      "effective_date": "2025-06-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_4",
+      "tone_variant": null,
+      "domains": [
+        "sla_credits"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "sla_uptime_threshold_pct": 99.9,
+        "sla_calculation_period": "monthly"
+      },
+      "metadata": {
+        "multi_hop_partner": "kb_chunk_sla_credit_calculation_v2"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_sla_credit_calculation_v2",
+      "document_id": "doc_sla_terms_v2",
+      "document_path": "policies/sla_terms.md",
+      "chunk_text": "SLA credits: 10% of the affected monthly fee per 0.1% of uptime below 99.9%, up to a maximum of 50% of the monthly fee. Credits are applied to the next invoice; they cannot be redeemed as cash or transferred between accounts.",
+      "constraint_type": "informational",
+      "effective_date": "2025-06-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_4",
+      "tone_variant": null,
+      "domains": [
+        "sla_credits"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "sla_credit_pct_per_0_1_below_threshold": 10,
+        "sla_credit_max_pct": 50,
+        "sla_credit_cash_payout": false
+      },
+      "metadata": {
+        "multi_hop_partner": "kb_chunk_sla_uptime_definition_v2"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_webhook_config_v3",
+      "document_id": "doc_webhook_retries_v3",
+      "document_path": "product_docs/webhook_retries.md",
+      "chunk_text": "Webhook endpoints must be HTTPS and must respond with an HTTP 200 status within 10 seconds. Redirects are not followed. Endpoints returning 4xx or 5xx, or timing out, are treated as failed deliveries.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_4",
+      "tone_variant": "bv_direct_clinical",
+      "domains": [
+        "api_and_webhooks"
+      ],
+      "intent_tags": [
+        "webhook_configuration"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "webhook_protocol": "https",
+        "webhook_response_timeout_seconds": 10,
+        "webhook_success_code": 200
+      },
+      "metadata": {
+        "multi_hop_partner": "kb_chunk_webhook_retry_policy_v3"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_webhook_retry_policy_v3",
+      "document_id": "doc_webhook_retries_v3",
+      "document_path": "product_docs/webhook_retries.md",
+      "chunk_text": "Failed webhook deliveries are retried automatically: attempt 2 after 5 minutes, attempt 3 after 30 minutes, attempt 4 after 2 hours. If all three retries fail, the event is written to the Dead Letter log and is not re-queued.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_4",
+      "tone_variant": null,
+      "domains": [
+        "api_and_webhooks"
+      ],
+      "intent_tags": [
+        "webhook_configuration"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "webhook_retry_schedule_minutes": [
+          5,
+          30,
+          120
+        ],
+        "webhook_retry_on_failure": "dead_letter"
+      },
+      "metadata": {
+        "multi_hop_partner": "kb_chunk_webhook_config_v3"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_monthly_customer_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "Monthly plan customers: submit a refund request via Settings > Billing > Refund Request. Eligible refunds are processed within 5-7 business days to the original payment method.",
+      "constraint_type": "allow_condition",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_5",
+      "tone_variant": "bv_direct_clinical",
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "monthly_refund_method": "self-serve",
+        "monthly_refund_path": "Settings > Billing > Refund Request"
+      },
+      "metadata": {
+        "contrast_pair": "kb_chunk_refund_annual_customer_v3",
+        "correct_for": "monthly_plan_customer"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_annual_customer_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "Annual plan customers are NOT eligible for monetary refunds. Annual plan customers who wish to cancel should contact their dedicated account manager to explore plan credit options for future purchases.",
+      "constraint_type": "deny_condition",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_5",
+      "tone_variant": "bv_direct_clinical",
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "annual_monetary_refund_eligible": false,
+        "annual_refund_contact": "account manager"
+      },
+      "metadata": {
+        "contrast_pair": "kb_chunk_refund_monthly_customer_v3",
+        "correct_for": "annual_plan_customer"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_growth_plan_pricing_v2",
+      "document_id": "doc_pricing_v2",
+      "document_path": "policies/pricing.md",
+      "chunk_text": "Growth plan: $499/month, includes up to 10 seats and 50,000 API credits per month. Additional seats are $49/month each, prorated for mid-cycle additions.",
+      "constraint_type": "informational",
+      "effective_date": "2025-09-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_5",
+      "tone_variant": "bv_direct_clinical",
+      "domains": [
+        "billing_and_invoicing",
+        "subscription_management"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "plan_name": "Growth",
+        "plan_price_monthly_usd": 499,
+        "plan_seats": 10,
+        "plan_api_credits": 50000
+      },
+      "metadata": {
+        "contrast_pair": "kb_chunk_enterprise_plan_pricing_v2",
+        "correct_for": "growth_plan_customer"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_enterprise_plan_pricing_v2",
+      "document_id": "doc_pricing_v2",
+      "document_path": "policies/pricing.md",
+      "chunk_text": "Enterprise plan: pricing is negotiated per contract. Includes unlimited seats, a dedicated customer success manager, and custom SLA terms. Contact sales@company.com to request a quote.",
+      "constraint_type": "informational",
+      "effective_date": "2025-09-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_5",
+      "tone_variant": null,
+      "domains": [
+        "billing_and_invoicing",
+        "subscription_management"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "plan_name": "Enterprise",
+        "plan_price_monthly_usd": null,
+        "plan_seats": "unlimited",
+        "plan_sla": "custom"
+      },
+      "metadata": {
+        "contrast_pair": "kb_chunk_growth_plan_pricing_v2",
+        "correct_for": "enterprise_customer"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_policy_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "[CURRENT \u2014 effective 2026-01-15] Refunds are processed within 5-7 business days. Customers may submit a refund request via the billing portal or by contacting support. This document supersedes refund_policy_v2.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_6",
+      "tone_variant": null,
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "refund_processing_days_min": 5,
+        "refund_processing_days_max": 7,
+        "policy_status": "current"
+      },
+      "metadata": {
+        "version": "v3",
+        "supersedes": "doc_refund_policy_v2"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_policy_v2",
+      "document_id": "doc_refund_policy_v2",
+      "document_path": "policies/archived/refund_policy_v2.md",
+      "chunk_text": "[SUPERSEDED \u2014 archived 2026-01-15] Refunds were processed within 10-14 business days. Requests required an email to billing@company.com and were eligible only within 14 days of purchase. This policy is no longer in effect.",
+      "constraint_type": "informational",
+      "effective_date": "2025-06-01",
+      "superseded_by": "kb_chunk_refund_policy_v3",
+      "counterintuitive": false,
+      "cat11_gate": "gate_6",
+      "tone_variant": null,
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "refund_processing_days_min": 10,
+        "refund_processing_days_max": 14,
+        "policy_status": "superseded"
+      },
+      "metadata": {
+        "version": "v2",
+        "archived": true,
+        "superseded_by": "v3"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_sla_terms_current_v2",
+      "document_id": "doc_sla_terms_v2",
+      "document_path": "policies/sla_terms.md",
+      "chunk_text": "[CURRENT \u2014 effective 2025-06-01] The platform SLA is 99.9% monthly uptime. Credits are issued automatically for any calendar month below this threshold, excluding scheduled maintenance. This document supersedes sla_terms_v1.",
+      "constraint_type": "informational",
+      "effective_date": "2025-06-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_6",
+      "tone_variant": null,
+      "domains": [
+        "sla_credits"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "version": "v2",
+        "supersedes": "doc_sla_terms_v1"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_sla_terms_archived_v1",
+      "document_id": "doc_sla_terms_v1",
+      "document_path": "policies/archived/sla_terms_v1.md",
+      "chunk_text": "[SUPERSEDED \u2014 archived 2025-06-01] The platform SLA was 99.5% monthly uptime. Credits were issued per ticket request only; automatic issuance was not available. This policy is no longer in effect.",
+      "constraint_type": "informational",
+      "effective_date": "2024-01-01",
+      "superseded_by": "kb_chunk_sla_terms_current_v2",
+      "counterintuitive": false,
+      "cat11_gate": "gate_6",
+      "tone_variant": null,
+      "domains": [
+        "sla_credits"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "version": "v1",
+        "archived": true,
+        "superseded_by": "v2"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_onboarding_guide_v2",
+      "document_id": "doc_customer_onboarding_v2",
+      "document_path": "runbooks/customer_onboarding.md",
+      "chunk_text": "New customer onboarding checklist: (1) connect your primary data source, (2) configure workspace settings, (3) invite your team members, (4) complete the product tour. Setup typically completes within 2-4 business days.",
+      "constraint_type": "informational",
+      "effective_date": "2025-07-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_7",
+      "tone_variant": null,
+      "domains": [
+        "onboarding_and_setup"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "gate_7_role": "red_herring",
+        "gate_7_uncovered_query": "GDPR data residency options"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_billing_faq_v1",
+      "document_id": "doc_common_billing_questions_v1",
+      "document_path": "faqs/common_billing_questions.md",
+      "chunk_text": "Frequently asked billing questions: How do I update my payment method? Go to Settings > Billing > Payment Methods. When is my account charged? On your subscription anniversary date each month. Where can I download invoices? Settings > Billing > Invoice History.",
+      "constraint_type": "informational",
+      "effective_date": "2025-08-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_7",
+      "tone_variant": null,
+      "domains": [
+        "billing_and_invoicing"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "gate_7_role": "red_herring",
+        "gate_7_uncovered_query": "custom contract terms negotiation"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_troubleshooting_billing_v1",
+      "document_id": "doc_troubleshooting_billing_v1",
+      "document_path": "runbooks/troubleshooting_billing.md",
+      "chunk_text": "Billing troubleshooting: if a charge looks incorrect, first confirm it matches your subscription plan and seat count. Download the invoice from Settings > Billing > Invoice History. For disputed charges, contact billing@company.com with the invoice number.",
+      "constraint_type": "informational",
+      "effective_date": "2025-09-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_7",
+      "tone_variant": null,
+      "domains": [
+        "billing_and_invoicing"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "gate_7_role": "red_herring",
+        "gate_7_uncovered_query": "white-label reseller agreement terms"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_window_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "The refund window is 30 days from the date of the first paid charge. Refund requests submitted after day 30 will not be processed under any circumstances.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_9",
+      "tone_variant": null,
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "refund_window_days": 30,
+        "exceptions_after_window": false
+      },
+      "metadata": {
+        "fake_citation_trap": "Agent may cite this chunk but state '60 days' or 'within 45 days' \u2014 the chunk is real but the claimed fact is fabricated."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_support_hours_v2",
+      "document_id": "doc_support_tiers_v2",
+      "document_path": "policies/support_tiers.md",
+      "chunk_text": "Standard support hours are Monday\u2013Friday, 9:00 AM\u20136:00 PM Eastern. 24/7 emergency coverage applies only to Priority Support add-on customers for P0 (complete service outage) incidents.",
+      "constraint_type": "informational",
+      "effective_date": "2025-12-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_9",
+      "tone_variant": null,
+      "domains": [
+        "billing_and_invoicing"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "fake_citation_trap": "Agent may cite this chunk but claim '24/7 support included' for all customers \u2014 the chunk restricts 24/7 to Priority Support add-on holders."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_data_portability_v2",
+      "document_id": "doc_data_policy_v2",
+      "document_path": "policies/data_policy.md",
+      "chunk_text": "Customers can export all account data in CSV or JSON format at any time from Settings > Data > Export. For accounts with fewer than 100,000 records, exports are ready instantly. For larger accounts, processing takes up to 24 hours.",
+      "constraint_type": "informational",
+      "effective_date": "2025-08-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_9",
+      "tone_variant": null,
+      "domains": [
+        "data_management"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "export_immediate_threshold_records": 100000,
+        "export_max_wait_hours": 24
+      },
+      "metadata": {
+        "fake_citation_trap": "Agent may cite this chunk but say exports are always instant, omitting the 24-hour processing time for large accounts."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_policy_intro_v3",
+      "document_id": "doc_refund_policy_v3",
+      "document_path": "policies/refund_policy.md",
+      "chunk_text": "Our refund policy is designed to be straightforward. Paid plan customers who are unsatisfied may request a refund within the eligibility window. All refund requests are reviewed within one business day and, if approved, processed within 5-7 business days.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-15",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_api_authentication_v3",
+      "document_id": "doc_api_rate_limits_v3",
+      "document_path": "product_docs/api_rate_limits.md",
+      "chunk_text": "API authentication uses Bearer tokens. Generate tokens from Settings > Developer > API Keys. Tokens do not expire automatically but can be revoked at any time. Revocation takes effect within 60 seconds across all services.",
+      "constraint_type": "informational",
+      "effective_date": "2026-02-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": "bv_warm_exploratory",
+      "domains": [
+        "api_and_webhooks",
+        "account_access"
+      ],
+      "intent_tags": [
+        "api_usage_question"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_sso_saml_setup_v1",
+      "document_id": "doc_sso_setup_v1",
+      "document_path": "product_docs/sso_setup.md",
+      "chunk_text": "SAML 2.0 SSO is available for all paid plan tiers. Configure your identity provider using the metadata URL from Settings > Security > SSO Configuration. Tested IdPs: Okta, Google Workspace, Microsoft Entra ID (formerly Azure AD), OneLogin.",
+      "constraint_type": "informational",
+      "effective_date": "2025-07-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "account_access"
+      ],
+      "intent_tags": [
+        "account_access_issue"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "sso_protocol": "saml_2.0",
+        "sso_available_plans": [
+          "starter",
+          "growth",
+          "enterprise"
+        ],
+        "supported_idps": [
+          "okta",
+          "google_workspace",
+          "entra_id"
+        ]
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_password_reset_v1",
+      "document_id": "doc_sso_setup_v1",
+      "document_path": "product_docs/sso_setup.md",
+      "chunk_text": "To reset a password: click 'Forgot password' on the sign-in page and enter your email address. A reset link is sent immediately and is valid for 24 hours. Accounts with SSO enabled should use their identity provider's password management instead.",
+      "constraint_type": "informational",
+      "effective_date": "2025-07-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "account_access"
+      ],
+      "intent_tags": [
+        "account_access_issue"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "password_reset_link_validity_hours": 24,
+        "sso_users_use_idp_for_reset": true
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_beta_feature_flags_v2",
+      "document_id": "doc_api_rate_limits_v3",
+      "document_path": "product_docs/api_rate_limits.md",
+      "chunk_text": "Beta features are gated by feature flags. Contact your account manager to enable beta access. Beta features are not covered by SLA guarantees and may be changed or removed without notice.",
+      "constraint_type": "informational",
+      "effective_date": "2026-02-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "how_to_usage"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_data_encryption_v2",
+      "document_id": "doc_data_policy_v2",
+      "document_path": "policies/data_policy.md",
+      "chunk_text": "All customer data is encrypted at rest with AES-256 and in transit with TLS 1.2 or higher. Encryption keys are managed via AWS KMS. Key rotation occurs automatically every 12 months.",
+      "constraint_type": "informational",
+      "effective_date": "2025-08-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "account_access"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_gdpr_dpa_v2",
+      "document_id": "doc_data_policy_v2",
+      "document_path": "policies/data_policy.md",
+      "chunk_text": "The platform is GDPR compliant. A Data Processing Agreement (DPA) is available upon request. Contact legal@company.com to request a signed DPA. DPAs are provided within 5 business days.",
+      "constraint_type": "informational",
+      "effective_date": "2025-08-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "data_management"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_integrations_overview_v3",
+      "document_id": "doc_customer_onboarding_v2",
+      "document_path": "runbooks/customer_onboarding.md",
+      "chunk_text": "Native integrations: Salesforce, HubSpot, Zendesk, Slack, Jira, GitHub. 40+ additional integrations are available via the Zapier connector. Custom integrations are available for Enterprise customers using the documented REST API.",
+      "constraint_type": "informational",
+      "effective_date": "2025-07-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "integrations"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_seat_management_v2",
+      "document_id": "doc_licensing_v2",
+      "document_path": "policies/licensing.md",
+      "chunk_text": "Manage team members from Settings > Team > Members. Admins can invite users, change roles, and deactivate accounts. Deactivated accounts continue to occupy a seat until the next billing cycle; deletion frees the seat immediately.",
+      "constraint_type": "informational",
+      "effective_date": "2025-11-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "subscription_management"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_eligibility_timelines_v1",
+      "document_id": "doc_refund_process_v1",
+      "document_path": "faqs/common_billing_questions.md",
+      "chunk_text": "Refund eligibility windows by plan tier: Starter \u2014 14 days from purchase; Growth \u2014 30 days from purchase; Enterprise \u2014 contact account manager (case-by-case). Timelines start from the date of charge, not the date of account setup or first login.",
+      "constraint_type": "informational",
+      "effective_date": "2025-05-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": "bv_direct_clinical",
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": true,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "adversarial_mode": "keyword_matching_irrelevant",
+        "trap": "High keyword overlap with refund queries. Content is valid for eligibility timelines but does NOT address the refund processing method, making it a distractor for questions about how to submit a refund."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_refund_grace_period_stale_v1",
+      "document_id": "doc_refund_process_v1",
+      "document_path": "faqs/common_billing_questions.md",
+      "chunk_text": "A 7-day grace period may be granted at agent discretion for customers who miss the standard refund window due to extenuating circumstances. Submit a grace period request to billing@company.com.",
+      "constraint_type": "informational",
+      "effective_date": "2024-03-01",
+      "superseded_by": "kb_chunk_refund_policy_v3",
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": true,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "adversarial_mode": "stale_policy_confabulation",
+        "trap": "This grace-period policy was removed in v3. Agents who cite this chunk are using a superseded document and making a promise the company no longer honours."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_all_customers_refund_bait_v1",
+      "document_id": "doc_refund_process_v1",
+      "document_path": "faqs/common_billing_questions.md",
+      "chunk_text": "We want every customer to be satisfied with their experience. Customer happiness is our top priority.",
+      "constraint_type": "informational",
+      "effective_date": "2025-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "refund_policy"
+      ],
+      "intent_tags": [],
+      "adversarial": true,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "adversarial_mode": "overgeneralization_bait",
+        "trap": "A confabulating agent may read this sentiment statement and infer a blanket refund-for-anyone policy \u2014 this chunk contains no such commitment."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_escalation_conditional_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Critical-severity technical issues are escalated according to the customer's plan tier. Enterprise accounts with an issue classified as severity_level=critical are assigned a dedicated escalation engineer within 1 hour of triage. Starter and Growth accounts with critical-severity issues are placed in the standard escalation queue with a next-business-day response. Issues at any severity below critical are routed to the standard queue regardless of plan tier.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_1",
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "critical_enterprise_escalation_hours": 1,
+        "critical_non_enterprise_escalation": "next_business_day",
+        "below_critical_escalation": "standard_queue"
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_no_auto_rollback_counterintuitive_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Configuration changes and release deployments that trigger an error state do NOT cause an automatic rollback. The platform requires an explicit rollback request from an authorized account administrator before initiating any rollback operation. Automatic rollback is disabled by design: in multi-service deployments, automated rollbacks have historically extended outages when the rollback conflicted with in-flight transactions or dependent service state. Customers who need to revert a deployment must open a support ticket with the deployment identifier to request manual rollback.",
+      "constraint_type": "deny_condition",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": true,
+      "cat11_gate": "gate_2",
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "auto_rollback_on_deployment_error": false,
+        "rollback_requires": "admin_support_ticket_with_deployment_id"
+      },
+      "metadata": {
+        "counterintuitive_reason": "Most SaaS platforms auto-rollback on deployment failures; this product requires explicit admin confirmation to prevent rollback conflicts with in-flight transactions in multi-service deployments."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_error_diagnostic_chain_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "ERR-403 errors indicate an authorization failure at the API layer. The most common cause is an API key generated without the permission scope required for the requested operation. To diagnose: navigate to Settings > Developer > API Keys and review the scope configuration for the key in use. If the required scope \u2014 such as 'read:reports' or 'write:data' \u2014 is absent, the resolution is to generate a new API key with the correct scope enabled, then update any integrations or scripts that reference the old key.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_4",
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "error_code": "ERR-403",
+        "likely_cause": "insufficient_api_key_scope",
+        "diagnostic_step": "verify_key_scope_at_settings_developer_api_keys",
+        "resolution": "generate_new_key_with_correct_scope_and_update_integrations"
+      },
+      "metadata": {
+        "gate_4_topology": "diagnostic_chain",
+        "chain_elements": [
+          "error_code",
+          "likely_cause",
+          "diagnostic_step",
+          "resolution"
+        ],
+        "note": "Control chunk \u2014 diagnostic-chain topology. Deliberately minimal. Structural novelty reserved for kb_chunk_ti_dependency_impact_probe_v1."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_connection_timeout_runbook_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Connection timeout errors fall into three categories with distinct resolutions. TCP timeout (connection refused, no response from platform): verify reachability using the connectivity ping test from the platform dashboard. TLS handshake failure (connection established but no data transferred): confirm TLS 1.2 or higher is enabled on the client; TLS 1.0 and 1.1 are not supported. DNS resolution failure (hostname not found): verify the platform domain is not blocked by a DNS filter, flush the local DNS cache, and retry. For timeout errors that do not match any of the three categories above, collect the full error trace and open a support ticket.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_7",
+      "tone_variant": "bv_warm_exploratory",
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "covered_timeout_types": [
+          "tcp_timeout",
+          "tls_handshake_failure",
+          "dns_resolution_failure"
+        ],
+        "uncovered_timeout_types": [
+          "proxy_load_balancer_timeout"
+        ]
+      },
+      "metadata": {
+        "gate_7_role": "partial_coverage",
+        "gate_7_uncovered_query": "proxy_and_load_balancer_timeout_errors",
+        "missing_variable": "network_topology"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_customer_diagnostic_allow_deny_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Customers may run the following diagnostics directly from the platform dashboard without contacting support: (1) connectivity ping test to verify platform endpoint reachability, (2) integration health check to confirm third-party connector status, (3) error log download covering the prior 72 hours. Customers may NOT initiate the following diagnostics independently \u2014 these require backend access and must be executed by a support engineer after a ticket is opened: session trace analysis, raw database query log retrieval, and inter-service routing diagnostics.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_8",
+      "tone_variant": "bv_direct_clinical",
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [
+        "diagnostic_access"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "customer_self_service_diagnostics": [
+          "connectivity_ping_test",
+          "integration_health_check",
+          "error_log_download_72h"
+        ],
+        "support_only_diagnostics": [
+          "session_trace_analysis",
+          "raw_database_query_logs",
+          "inter_service_routing_diagnostics"
+        ]
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_overview_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Technical issues are categorized by severity and routed accordingly. Severity levels: critical (service completely unavailable or data loss in progress), high (major functionality impaired, no workaround available), medium (functionality impaired but a workaround exists), low (cosmetic or minor issues with no functional impact). All technical issues are tracked via support tickets and receive a reference number for status inquiries. Initial triage assigns a severity level and routes the issue to the appropriate support tier. Customers with the priority_support add-on receive accelerated triage for critical and high-severity issues.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "severity_levels": [
+          "critical",
+          "high",
+          "medium",
+          "low"
+        ],
+        "critical_definition": "service_unavailable_or_data_loss_in_progress",
+        "high_definition": "major_functionality_impaired_no_workaround"
+      },
+      "metadata": {},
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_incident_response_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Incident response for technical issues follows a five-phase process. Detection: the incident is identified through a customer report or platform monitoring alert. Triage: severity is assessed; an incident commander is assigned for critical issues. Escalation: critical and high-severity incidents are routed to the engineering team. Resolution: root cause is identified and a fix or workaround is applied and verified. Post-incident review: for critical incidents, a post-mortem is completed within 5 business days, documenting root cause, impact timeline, and preventive measures. Post-mortem summaries are shared with affected Enterprise customers on request.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "depth_contribution": "introduces_new_process_stage",
+        "new_stage": "post_incident_review_with_post_mortem"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_error_taxonomy_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Technical error codes follow a structured taxonomy. 4xx codes indicate client-side problems: ERR-400 malformed request, ERR-401 authentication required, ERR-403 insufficient permissions, ERR-404 resource not found, ERR-429 rate limit exceeded. 5xx codes indicate server-side or platform problems: ERR-500 internal error, ERR-503 service unavailable (maintenance or overload), ERR-504 gateway timeout. Data integrity events use the ERR-DI prefix: ERR-DI-001 through ERR-DI-099 indicate validation failures recoverable without escalation; ERR-DI-100 and above indicate corruption-class events and require immediate escalation to the support team.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "error_4xx_codes": [
+          "ERR-400",
+          "ERR-401",
+          "ERR-403",
+          "ERR-404",
+          "ERR-429"
+        ],
+        "error_5xx_codes": [
+          "ERR-500",
+          "ERR-503",
+          "ERR-504"
+        ],
+        "data_integrity_prefix": "ERR-DI",
+        "data_integrity_escalation_threshold_code": "ERR-DI-100"
+      },
+      "metadata": {
+        "depth_contribution": "introduces_new_entity_type",
+        "new_entity": "error_code_taxonomy_with_data_integrity_prefix"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_self_service_guide_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Before opening a support ticket, customers should complete the self-service diagnostic checklist available from Settings > Diagnostics on the platform dashboard. Recommended steps: (1) run the connectivity ping test to rule out network-side issues, (2) check status.company.com for any active platform incidents, (3) download the error log for the prior 72 hours and scan for repeated error codes, (4) confirm the action was attempted on the latest browser version or API client version. Tickets submitted with the error log attached resolve on average 40% faster. Support engineers cannot expedite tickets submitted without diagnostic data.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "depth_contribution": "introduces_new_process_stage",
+        "new_stage": "pre_support_self_service_checklist"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_severity_sla_conditional_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Support response SLAs for technical issues vary by severity level and add-on status. Customers with the priority_support add-on receive a 4-hour first-response SLA for P1 (critical) issues. All other customers \u2014 including Enterprise accounts without the add-on \u2014 receive a next-business-day first-response commitment for P1 issues. P2 (high) issues receive a next-business-day first response for all customers. P3 (medium) and P4 (low) issues are addressed within 3 business days for all customers.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_1",
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "p1_priority_support_first_response_hours": 4,
+        "p1_standard_first_response": "next_business_day",
+        "p2_first_response": "next_business_day",
+        "p3_p4_response_business_days": 3
+      },
+      "metadata": {
+        "depth_contribution": "introduces_alternative_policy_branch",
+        "policy_branch": "response_sla_conditioned_on_priority_support_addon"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_outage_reporting_allow_deny_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Customers may designate their open technical issue as a 'Service Disruption' in the support portal, which flags the ticket for expedited review by the operations team. Customers may NOT declare an official 'Service Outage' \u2014 outage declarations are made exclusively by the platform operations team after internal incident verification. A customer-reported 'Service Disruption' that is confirmed by the operations team may be elevated to an official outage and posted on the platform status page. Self-labeling a ticket as an outage in the description does not trigger accelerated treatment beyond the service disruption designation.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_8",
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "customer_can_designate": "service_disruption",
+        "customer_cannot_designate": "service_outage",
+        "outage_declared_by": "platform_operations_team_only"
+      },
+      "metadata": {
+        "depth_contribution": "introduces_alternative_policy_branch",
+        "policy_branch": "outage_designation_authority"
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_webhook_error_allow_deny_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "For technical issues involving webhook delivery failures, customers may independently access the Dead Letter log from Settings > Developer > Webhooks > Dead Letter to inspect failed delivery records and identify error codes. Customers may NOT replay or re-queue failed webhook events without contacting support \u2014 self-service replay is disabled to prevent duplicate event delivery to downstream systems that may not be idempotent. Support engineers can authorize a targeted replay of specific Dead Letter entries after confirming that the receiving system is in a state to safely accept duplicate event delivery.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_8",
+      "tone_variant": "bv_warm_exploratory",
+      "domains": [
+        "technical_issue",
+        "api_and_webhooks"
+      ],
+      "intent_tags": [
+        "webhook_configuration"
+      ],
+      "adversarial": false,
+      "sanity_probe": false,
+      "claims": {
+        "customer_can_access": "dead_letter_log_read_only",
+        "customer_cannot_do": "self_service_webhook_replay",
+        "replay_authorized_by": "support_engineer",
+        "replay_disabled_reason": "prevent_duplicate_delivery_to_non_idempotent_systems"
+      },
+      "metadata": {
+        "depth_contribution": "introduces_cross_domain_interaction",
+        "cross_domain_pair": [
+          "technical_issue",
+          "api_and_webhooks"
+        ],
+        "reasoning_step_preservation": "Two reasoning steps required: (1) api_and_webhooks: Dead Letter log mechanics + idempotency risk; (2) technical_issue: support-authorization gate for replay. Cross-domain tag does not shorten the chain \u2014 both steps are required."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_severity_inflation_adv_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "Data integrity errors (ERR-DI prefix) require case-by-case severity review. Issues where customer-accessible records show corrupted or inconsistent values may warrant a severity upgrade to critical if the corruption is confirmed to affect active billing records or in-progress transactions. The majority of ERR-DI events are classified as high severity \u2014 next-business-day response \u2014 because most data integrity issues are localized to historical records and are recoverable without service interruption. Routine ERR-DI-001 validation failures are classified as medium severity.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": true,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "adversarial_mode": "severity_inflation",
+        "trap": "A confabulating agent may read 'may warrant a severity upgrade to critical if corruption affects billing records' and generalize to 'data integrity errors affecting billing are always critical.' The chunk states 'may warrant' (conditional) and explicitly says most ERR-DI events are high, not critical. Trap mechanism: dropping the conditional qualifier and the base-rate clarification while retaining the billing-corruption example."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_resolution_overpromise_adv_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "ERR-503 errors may resolve automatically within 15 minutes when the root cause is a transient platform load spike. Platform monitoring automatically distinguishes transient spikes from persistent service degradation and updates the status page accordingly. If an ERR-503 error persists beyond 15 minutes, the issue requires manual investigation and customers should open a support ticket. The 15-minute auto-resolution window does not apply to ERR-503-MAINT codes, which indicate scheduled maintenance and have no automatic resolution timeline.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": true,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "adversarial_mode": "resolution_overpromise",
+        "trap": "A confabulating agent may cite this chunk and state 'ERR-503 errors resolve automatically' without preserving three required qualifiers: (1) 'may resolve' \u2014 not guaranteed, (2) 'within 15 minutes' \u2014 time-bounded, (3) ERR-503-MAINT excluded from auto-resolution. Omitting any one of these qualifiers is a resolution overpromise."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_diagnostic_omission_adv_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "To diagnose intermittent ERR-401 authentication errors on the API: (1) Confirm the API key is still active and has not been revoked by checking Settings > Developer > API Keys \u2014 revoked keys return ERR-401 on every request, not intermittently. (2) Verify the API key has not expired by reviewing the key's expiry date in the same settings view. (3) Before concluding the key is valid, confirm that the account's IP allowlist (Settings > Security > IP Allowlist) does not block the originating IP address \u2014 IP allowlist rejections return ERR-401 indistinguishably from authentication failures and are the most common source of intermittent ERR-401 errors. (4) If steps 1\u20133 pass, collect the full request trace and open a support ticket.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": null,
+      "tone_variant": "bv_direct_clinical",
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": true,
+      "sanity_probe": false,
+      "claims": {},
+      "metadata": {
+        "adversarial_mode": "diagnostic_step_omission",
+        "trap": "A confabulating agent may cite this chunk but summarize only steps (1) and (2) \u2014 checking key revocation and expiry \u2014 and omit step (3), the IP allowlist check. Steps (1) and (2) are obvious; step (3) is the non-obvious load-bearing step because IP allowlist rejections are ERR-401-identical and the most common cause of intermittent (not persistent) failures. Omitting step (3) misdiagnoses the most likely root cause."
+      },
+      "branches": [],
+      "global_constraints": []
+    },
+    {
+      "chunk_id": "kb_chunk_ti_dependency_impact_probe_v1",
+      "document_id": "doc_technical_support_v1",
+      "document_path": "product_docs/technical_support.md",
+      "chunk_text": "When the API gateway experiences a service disruption, the following dependent services are affected downstream: webhook delivery (events queue but are not dispatched to endpoints), scheduled job runner (export and data-sync jobs fail to start), and third-party integration syncs (real-time sync is paused; the last successful sync timestamp is frozen). Customer-visible impact: webhook payloads accumulate in the Dead Letter log; scheduled data exports do not execute on their configured schedule; integration dashboards display stale data from the last successful sync. Workarounds while the gateway is recovering: inspect the Dead Letter log and request a targeted replay via support; trigger a manual export re-run from Settings > Data > Export; force a connector sync from Settings > Integrations > [connector] > Force Sync.",
+      "constraint_type": "informational",
+      "effective_date": "2026-01-01",
+      "superseded_by": null,
+      "counterintuitive": false,
+      "cat11_gate": "gate_4",
+      "tone_variant": null,
+      "domains": [
+        "technical_issue"
+      ],
+      "intent_tags": [],
+      "adversarial": false,
+      "sanity_probe": true,
+      "claims": {
+        "failed_component": "api_gateway",
+        "dependent_services": [
+          "webhook_delivery",
+          "scheduled_job_runner",
+          "third_party_integration_syncs"
+        ],
+        "customer_visible_impact": [
+          "webhook_dead_letter_accumulation",
+          "scheduled_exports_fail_to_execute",
+          "integration_data_stale"
+        ],
+        "workarounds": [
+          "dead_letter_targeted_replay_via_support",
+          "manual_export_rerun_settings_data_export",
+          "force_sync_settings_integrations_connector"
+        ]
+      },
+      "metadata": {
+        "gate_4_topology": "dependency_impact",
+        "chain_elements": [
+          "failed_component",
+          "dependent_services",
+          "customer_visible_impact",
+          "workarounds"
+        ],
+        "probe_topology_note": "dependency-impact: system component graph (failed_component \u2192 dependent_services \u2192 customer_visible_impact \u2192 workarounds). Distinct from diagnostic-chain (forward-causal), financial-categorical (credit-tier), and operational-sequence (webhook config+retry) topologies in existing gate_4 chunks."
+      },
+      "branches": [],
+      "global_constraints": []
+    }
+  ],
+  "lexicons": {
+    "acknowledgment_phrases": [
+      "i understand",
+      "i can see",
+      "i can imagine",
+      "that makes sense",
+      "i hear you",
+      "i appreciate",
+      "thank you for letting us know",
+      "thank you for reaching out",
+      "sorry you're experiencing",
+      "sorry you're hitting",
+      "sorry you're running into",
+      "sorry you're seeing",
+      "sorry to hear",
+      "i'm sorry that",
+      "i know this is",
+      "i realize this is",
+      "that must be",
+      "understandably",
+      "completely understand",
+      "totally understand",
+      "i see what you mean",
+      "i get that",
+      "i know how",
+      "i'd be happy",
+      "happy to help",
+      "no problem",
+      "got it",
+      "good question",
+      "of course",
+      "absolutely",
+      "sure thing"
+    ],
+    "emotion_lexicon": [
+      "frustrated",
+      "frustration",
+      "inconvenient",
+      "inconvenience",
+      "confusing",
+      "confusion",
+      "stressful",
+      "stress",
+      "upset",
+      "disappointing",
+      "disappointed",
+      "annoyed",
+      "concerned",
+      "worry",
+      "worried",
+      "anxious",
+      "difficult",
+      "overwhelming",
+      "trouble",
+      "struggle",
+      "struggling",
+      "glad",
+      "happy",
+      "pleased",
+      "delighted",
+      "wonderful",
+      "great to hear",
+      "good luck"
+    ],
+    "apology_lexicon": [
+      "apologize",
+      "apologies",
+      "my apologies",
+      "i'm sorry",
+      "so sorry",
+      "sorry about",
+      "sorry for",
+      "sincere apologies",
+      "we're sorry",
+      "deeply sorry"
+    ],
+    "action_verb_lexicon": [
+      "fix",
+      "resolve",
+      "send",
+      "escalate",
+      "refund",
+      "replace",
+      "schedule",
+      "confirm",
+      "process",
+      "update",
+      "check",
+      "look into",
+      "investigate",
+      "handle",
+      "arrange",
+      "coordinate",
+      "expedite",
+      "prioritize",
+      "follow up",
+      "create",
+      "submit",
+      "open",
+      "close",
+      "transfer",
+      "connect",
+      "reach out",
+      "get back",
+      "reach back",
+      "walk",
+      "guide",
+      "show",
+      "help",
+      "assist",
+      "explain",
+      "clarify",
+      "take you through"
+    ],
+    "resolution_patterns": [
+      "\\byou can\\b",
+      "\\bwe'?ve\\b",
+      "\\bi'?ve\\s+(?:fixed|resolved|updated|applied|corrected|pushed|deployed|patched|removed|added|reset|changed|adjusted|rebuilt|cleared|sent|issued|processed|created)\\b",
+      "\\bhere'?s how\\b",
+      "\\bto resolve\\b",
+      "\\bthe solution\\b",
+      "\\bplease try\\b",
+      "\\bsteps to\\b",
+      "\\bfollow these\\b",
+      "\\bthe fix\\b",
+      "\\bwe have\\b",
+      "\\bi have\\b",
+      "\\bthis will\\b",
+      "\\byou should be able\\b",
+      "\\bthat should\\b",
+      "\\bthis should\\b",
+      "\\byou'?ll want to\\b",
+      "\\byou'?d need to\\b",
+      "\\byou need to\\b",
+      "\\bgo to\\b",
+      "\\bclick (?:on |the )\\b",
+      "\\bcopy (?:the |that )\\b",
+      "\\bpaste (?:it|that|the)\\b",
+      "\\bwhat you need to do\\b",
+      "\\bi'?m (?:escalating|routing|transferring)\\b",
+      "\\bi'?ll (?:fix|update|resolve|escalate|loop in|bring in)\\b",
+      "\\bescalating this\\b",
+      "\\bour (?:engineering|billing|technical|infrastructure) team\\b.{0,40}\\bwill\\b",
+      "\\bi'?ll (?:look into|dig into|dig in|investigate|check)\\b"
+    ],
+    "deflection_patterns": [
+      "\\bplease contact\\b",
+      "\\bcheck (?:the )?documentation\\b",
+      "\\bcheck (?:the )?docs\\b",
+      "\\bhave you (?:checked|tried|looked at)\\b",
+      "\\brefer to\\b",
+      "\\bour support team\\b",
+      "\\bsubmit a ticket\\b",
+      "\\bopen a ticket\\b",
+      "\\bfeel free to contact\\b",
+      "\\byou can find\\b.{0,30}\\bhelp center\\b",
+      "\\boutside (?:my|our) (?:scope|expertise)\\b"
+    ],
+    "next_steps_patterns": [
+      "\\bwill\\b",
+      "\\bgoing to\\b",
+      "\\bnext step\\b",
+      "\\bwe'?ll\\b",
+      "\\bi'?ll\\b",
+      "\\bby [a-z]+ (?:morning|afternoon|evening|day|week|friday|monday)\\b",
+      "\\bwithin \\d+",
+      "\\bby end of\\b",
+      "\\btoday\\b",
+      "\\btomorrow\\b"
+    ],
+    "temporal_anchor_patterns": [
+      "\\bby [a-z]+ (?:morning|afternoon|evening|day|week|friday|monday)\\b",
+      "\\bwithin \\d+[-\u2013]\\d+ (?:hours?|minutes?|days?|business days?)\\b",
+      "\\bwithin \\d+ (?:hours?|minutes?|days?|business days?)\\b",
+      "\\bby end of (?:day|week|business day)\\b",
+      "\\bby tomorrow\\b",
+      "\\bby today\\b",
+      "\\bin \\d+ (?:hours?|minutes?|days?)\\b",
+      "\\btoday\\b"
+    ],
+    "specific_actor_patterns": [
+      "\\bi'?ll\\b",
+      "\\bour team will\\b",
+      "\\bour engineering team\\b",
+      "\\bour billing team\\b",
+      "\\bi'?m going to\\b",
+      "\\bi will\\b",
+      "\\bwe will\\b",
+      "\\bwe'?ll\\b"
+    ],
+    "ownership_patterns": [
+      "\\bi will\\b",
+      "\\bi'?ve\\b",
+      "\\blet me\\b",
+      "\\bi can handle\\b",
+      "\\bi'?ll take\\b",
+      "\\bi'?m handling\\b",
+      "\\bi'?m going to\\b",
+      "\\bi'?m taking\\b",
+      "\\bmy responsibility\\b",
+      "\\bi'?m on it\\b",
+      "\\bi'?ll (?:fix|update|resolve|look into|dig into|dig in|investigate|check)\\b",
+      "\\bi'?m (?:escalating|routing|transferring)\\b",
+      "\\bi'?ve (?:already|just|now)\\b"
+    ],
+    "issue_keywords": [
+      "billing",
+      "charge",
+      "refund",
+      "payment",
+      "subscription",
+      "account",
+      "access",
+      "login",
+      "password",
+      "feature",
+      "integration",
+      "api",
+      "data",
+      "export",
+      "import",
+      "sync",
+      "error",
+      "bug",
+      "broken",
+      "not working",
+      "failed",
+      "crash",
+      "slow",
+      "performance",
+      "timeout",
+      "webhook",
+      "notification"
+    ],
+    "completion_verb_patterns": [
+      "fixed",
+      "resolved",
+      "updated",
+      "applied",
+      "corrected",
+      "pushed",
+      "deployed",
+      "patched",
+      "removed",
+      "added",
+      "reset",
+      "changed",
+      "adjusted",
+      "rebuilt",
+      "cleared",
+      "sent",
+      "issued",
+      "processed",
+      "created"
+    ],
+    "completion_resolution_patterns": [
+      "\\byou can\\b",
+      "\\bwe'?ve\\b",
+      "\\bi'?ve\\s+(?:fixed|resolved|updated|applied|corrected|pushed|deployed|patched|removed|added|reset|changed|adjusted|rebuilt|cleared|sent|issued|processed|created)\\b",
+      "\\bhere'?s how\\b",
+      "\\bto resolve\\b",
+      "\\bthe solution\\b",
+      "\\bplease try\\b",
+      "\\bsteps to\\b",
+      "\\bfollow these\\b",
+      "\\bthe fix\\b",
+      "\\bwe have\\b",
+      "\\bi have\\b",
+      "\\bthis will\\b",
+      "\\byou should be able\\b",
+      "\\bthat should\\b",
+      "\\bthis should\\b",
+      "\\byou'?ll want to\\b",
+      "\\byou'?d need to\\b",
+      "\\byou need to\\b",
+      "\\bgo to\\b",
+      "\\bclick (?:on |the )\\b",
+      "\\bcopy (?:the |that )\\b",
+      "\\bpaste (?:it|that|the)\\b",
+      "\\bwhat you need to do\\b",
+      "\\bi'?m (?:escalating|routing|transferring)\\b",
+      "\\bi'?ll (?:fix|update|resolve|escalate|loop in|bring in)\\b",
+      "\\bescalating this\\b",
+      "\\bour (?:engineering|billing|technical|infrastructure) team\\b.{0,40}\\bwill\\b"
+    ],
+    "hedging_lexicon": [
+      "might",
+      "could",
+      "perhaps",
+      "let's",
+      "it seems",
+      "maybe",
+      "possibly",
+      "it appears",
+      "it looks like",
+      "wondering if",
+      "i believe",
+      "i think",
+      "seems like",
+      "if that's",
+      "if you'd",
+      "you might want"
+    ],
+    "directive_lexicon": [
+      "do",
+      "click",
+      "follow",
+      "use",
+      "check",
+      "select",
+      "enter",
+      "navigate",
+      "go to",
+      "open",
+      "close",
+      "click on",
+      "tap",
+      "scroll",
+      "type",
+      "copy",
+      "paste",
+      "download",
+      "upload",
+      "enable",
+      "disable",
+      "toggle"
+    ],
+    "warm_terms": [
+      "happy to",
+      "love to",
+      "excited",
+      "wonderful",
+      "great",
+      "amazing",
+      "fantastic",
+      "absolutely",
+      "definitely",
+      "certainly",
+      "of course",
+      "let's",
+      "together",
+      "journey",
+      "explore",
+      "discover",
+      "wondering",
+      "curious",
+      "interesting",
+      "love",
+      "enjoy",
+      "appreciate",
+      "delight",
+      "glad",
+      "thrilled",
+      "warmly"
+    ],
+    "clinical_terms": [
+      "confirm",
+      "verify",
+      "ensure",
+      "proceed",
+      "execute",
+      "implement",
+      "utilize",
+      "leverage",
+      "optimize",
+      "configure",
+      "initiate",
+      "terminate",
+      "escalate",
+      "document",
+      "remediate",
+      "resolve",
+      "validate",
+      "authorize",
+      "authenticate",
+      "provision"
+    ],
+    "contraction_patterns": [
+      "\\bdon'?t\\b",
+      "\\bwon'?t\\b",
+      "\\bcan'?t\\b",
+      "\\bi'?m\\b",
+      "\\bi'?ll\\b",
+      "\\bi'?ve\\b",
+      "\\bwe'?re\\b",
+      "\\bwe'?ll\\b",
+      "\\bwe'?ve\\b",
+      "\\byou'?re\\b",
+      "\\byou'?ll\\b",
+      "\\byou'?ve\\b",
+      "\\bit'?s\\b",
+      "\\bthat'?s\\b",
+      "\\bthere'?s\\b",
+      "\\bthey'?re\\b",
+      "\\bisn'?t\\b",
+      "\\baren'?t\\b",
+      "\\bhasn'?t\\b",
+      "\\bhaven'?t\\b",
+      "\\bwasn'?t\\b",
+      "\\bweren'?t\\b",
+      "\\bdidn'?t\\b",
+      "\\bshouldn'?t\\b",
+      "\\bwouldn'?t\\b",
+      "\\bcouldn'?t\\b"
+    ],
+    "synonym_map": {
+      "reimbursement": "refund",
+      "reimburse": "refund",
+      "terminate": "cancel",
+      "cancellation": "cancel",
+      "cancelled": "cancel",
+      "subscription end": "cancel",
+      "billing": "payment",
+      "charge": "payment",
+      "invoice": "payment",
+      "invoiced": "payment",
+      "login": "access",
+      "sign in": "access",
+      "authenticate": "access",
+      "authorization": "access",
+      "reach out": "contact",
+      "get in touch": "contact",
+      "drop us a line": "contact",
+      "per": "according to",
+      "per our": "according to our",
+      "as per": "according to"
+    }
+  },
+  "brand_voice": {
+    "variant_id": "bv_baseline",
+    "feature_profiles": {
+      "bv_warm_exploratory": {
+        "sentence_length_range": [
+          8,
+          25
+        ],
+        "question_count_range": [
+          1,
+          5
+        ],
+        "hedging_range": [
+          2,
+          10
+        ],
+        "directive_range": [
+          0,
+          3
+        ],
+        "aligned_term_field": "warm_terms_count",
+        "aligned_terms_min": 2,
+        "formality_range": [
+          0.2,
+          0.6
+        ]
+      },
+      "bv_direct_clinical": {
+        "sentence_length_range": [
+          5,
+          15
+        ],
+        "question_count_range": [
+          0,
+          2
+        ],
+        "hedging_range": [
+          0,
+          2
+        ],
+        "directive_range": [
+          3,
+          15
+        ],
+        "aligned_term_field": "clinical_terms_count",
+        "aligned_terms_min": 2,
+        "formality_range": [
+          0.5,
+          1.0
+        ]
+      },
+      "bv_baseline": {
+        "sentence_length_range": [
+          6,
+          20
+        ],
+        "question_count_range": [
+          0,
+          4
+        ],
+        "hedging_range": [
+          0,
+          6
+        ],
+        "directive_range": [
+          0,
+          8
+        ],
+        "aligned_term_field": "warm_terms_count",
+        "aligned_terms_min": 0,
+        "formality_range": [
+          0.3,
+          0.8
+        ]
+      }
+    }
+  },
+  "validator_inputs": {
+    "accuracy": {
+      "extracted_claims": [
+        {
+          "claim_text": "with the Growth plan at $499/month, you get up to 10 seats included",
+          "claim_span": [
+            234,
+            310
+          ],
+          "claim_type": "policy",
+          "normalized_subject": "growth plan at 499 month",
+          "normalized_predicate": "includes",
+          "normalized_object": "up to 10 seats",
+          "alignment": "supported"
+        },
+        {
+          "claim_text": "You only start incurring additional charges if you go beyond the 10 included seats",
+          "claim_span": [
+            380,
+            461
+          ],
+          "claim_type": "policy",
+          "normalized_subject": "additional charges",
+          "normalized_predicate": "start when",
+          "normalized_object": "usage goes beyond 10 included seats",
+          "alignment": "supported"
+        },
+        {
+          "claim_text": "each extra seat would be $49/month",
+          "claim_span": [
+            467,
+            501
+          ],
+          "claim_type": "policy",
+          "normalized_subject": "each extra seat",
+          "normalized_predicate": "costs",
+          "normalized_object": "49 month",
+          "alignment": "supported"
+        },
+        {
+          "claim_text": "The Growth plan comes with 50,000 API credits per month",
+          "claim_span": [
+            523,
+            583
+          ],
+          "claim_type": "policy",
+          "normalized_subject": "growth plan",
+          "normalized_predicate": "includes",
+          "normalized_object": "50 000 api credits per month",
+          "alignment": "supported"
+        },
+        {
+          "claim_text": "your account health score is looking really strong at 0.89 this month",
+          "claim_span": [
+            668,
+            738
+          ],
+          "claim_type": "factual",
+          "normalized_subject": "account health score",
+          "normalized_predicate": "is",
+          "normalized_object": "0 89 this month",
+          "alignment": "supported"
+        }
+      ],
+      "extraction_meta": {
+        "model": "claude-haiku-4-5-20251001",
+        "prompt_version": "sha256:80b6d594a6229e35d4d65703449e8c1be477b1f233d6a0578d672fbfb986f996",
+        "extracted_at": "2026-05-11T20:31:27.841210+00:00",
+        "claims_hash": "sha256:dc035e8875d2841f00a615a63d43ea6826a8057597635c184d08460ea4f9e0f7"
+      }
+    }
+  },
+  "metadata": {
+    "conv_id": "conv_evt_00168",
+    "source_corpus": "/Users/tjbaker/Projects/resonantiq/corpus-live-smoke-11/saas",
+    "pipeline_version": "0.2.0",
+    "kb_version": "e0f31889c78d46e6b6f6d9f63d08dbfe1b4c2c6461f573c05fb681c53872fffb",
+    "generator_version": "0.2.0",
+    "extraction_timestamp": "2026-05-11T20:31:27.841210+00:00",
+    "skipped_during_generation": true
+  }
+}

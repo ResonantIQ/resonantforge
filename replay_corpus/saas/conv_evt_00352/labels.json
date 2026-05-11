@@ -10,7 +10,8 @@
     "empathy": false,
     "resolution": false,
     "brand_voice": false,
-    "claim_extraction": true
+    "claim_extraction": true,
+    "layer1_signal": false
   },
   "confidence": "high",
   "tags": [
