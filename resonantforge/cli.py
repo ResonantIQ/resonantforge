@@ -37,6 +37,13 @@ _PROFILE_DEFAULTS: dict[str, dict[str, int]] = {
     "ps": {"accounts": 5, "months": 3},
 }
 
+# --smoke mode: ~108 conversations (5 accounts × 4 months).
+# Gives 5-6 reps per accuracy label type (vs 3 at 2 months) and ~46% planted
+# rate, which is more representative than the 96% at 2 months. Still ~7.5×
+# cheaper than the full 25×6 default.
+_SMOKE_ACCOUNTS = 5
+_SMOKE_MONTHS = 4
+
 _DEFAULT_PROFILE = "saas"
 
 
@@ -92,6 +99,7 @@ def cli() -> None:
 @click.option("--force", is_flag=True, default=False, help="Overwrite existing output directory contents instead of failing fast.")
 @click.option("--replay-out", "replay_out", default=None, type=click.Path(), help="Root directory for replay envelopes (default: ./replay_corpus). Envelopes use already-extracted claims — no extra LLM cost.")
 @click.option("--no-replay", "no_replay", is_flag=True, default=False, help="Skip replay envelope writing entirely.")
+@click.option("--smoke", "smoke", is_flag=True, default=False, help=f"Smoke-test mode: {_SMOKE_ACCOUNTS} accounts × {_SMOKE_MONTHS} months (~50 conversations). Mutually exclusive with --accounts/--months.")
 def generate(
     profile: str,
     accounts: Optional[int],
@@ -105,12 +113,20 @@ def generate(
     force: bool,
     replay_out: Optional[str],
     no_replay: bool,
+    smoke: bool,
 ) -> None:
     """Run the corpus generation pipeline."""
     import sys as _sys
     from resonantforge.pipeline import PipelineConfig, run_pipeline
 
-    resolved_accounts, resolved_months = _resolve_profile_defaults(profile, accounts, months)
+    if smoke and (accounts is not None or months is not None):
+        console.print("[bold red]Error:[/bold red] --smoke is mutually exclusive with --accounts and --months.")
+        sys.exit(1)
+
+    if smoke:
+        resolved_accounts, resolved_months = _SMOKE_ACCOUNTS, _SMOKE_MONTHS
+    else:
+        resolved_accounts, resolved_months = _resolve_profile_defaults(profile, accounts, months)
 
     # --out is deprecated; warn and map to --out-root.
     if out_legacy is not None:
@@ -167,6 +183,8 @@ def generate(
     )
 
     mode_label = "dry-run" if effective_api_key is None else "live"
+    if smoke:
+        console.print("[bold yellow]⚡ SMOKE MODE[/bold yellow] — cheap validator iteration (~100 conversations)")
     console.print(
         f"[bold]rforge generate[/bold]  profile=[cyan]{profile}[/cyan]  "
         f"accounts=[cyan]{resolved_accounts}[/cyan]  months=[cyan]{resolved_months}[/cyan]  "
