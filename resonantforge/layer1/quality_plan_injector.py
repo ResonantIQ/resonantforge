@@ -259,18 +259,27 @@ class QualityPlanInjector:
     skips conversations that fail the pre-prompt gate.
     """
 
-    def __init__(self, rng: random.Random, profile_name: str = "saas"):
+    def __init__(
+        self,
+        rng: random.Random,
+        profile_name: str = "saas",
+        negative_fraction: float = 0.5,
+    ):
         """
         Initialise the injector with a seeded RNG and a profile name.
 
         Args:
-            rng:          A seeded ``random.Random`` instance — all shuffles and
-                          picks go through this so corpus generation is deterministic.
-            profile_name: Profile label (``"saas"`` or ``"ps"``); controls which
-                          planted count is expected from the caller.
+            rng:               A seeded ``random.Random`` instance — all shuffles and
+                               picks go through this so corpus generation is deterministic.
+            profile_name:      Profile label (``"saas"`` or ``"ps"``); controls which
+                               planted count is expected from the caller.
+            negative_fraction: Fraction of dimension slots to assign a failing target.
+                               0.0 → all passing (high/strong/on_brand); 1.0 → all
+                               failing (low/weak/off_brand); default 0.5.
         """
         self.rng = rng
         self.profile_name = profile_name
+        self.negative_fraction = negative_fraction
         self.validator = PlanValidator()
         # Pool-starvation telemetry — accumulated during inject(), read by pipeline.
         self.pool_starvation_count: int = 0
@@ -415,12 +424,27 @@ class QualityPlanInjector:
         per_dim = remaining // 4
         leftover = remaining - per_dim * 4
 
-        for i in range(per_dim):
-            schedule.append({"type": "empathy", "target": "low" if i % 2 == 0 else "high"})
-        for i in range(per_dim):
-            schedule.append({"type": "resolution", "target": _resolution_target_for_index(i)})
-        for i in range(per_dim):
-            schedule.append({"type": "brand_voice", "target": "off_brand" if i % 2 == 0 else "on_brand"})
+        neg_count = round(per_dim * self.negative_fraction)
+        pos_count = per_dim - neg_count
+
+        for _ in range(neg_count):
+            schedule.append({"type": "empathy", "target": "low"})
+        for _ in range(pos_count):
+            schedule.append({"type": "empathy", "target": "high"})
+
+        neg_res = round(per_dim * self.negative_fraction)
+        pos_res = per_dim - neg_res
+        for _ in range(neg_res):
+            schedule.append({"type": "resolution", "target": "weak"})
+        for _ in range(pos_res):
+            schedule.append({"type": "resolution", "target": "strong"})
+
+        neg_bv = round(per_dim * self.negative_fraction)
+        pos_bv = per_dim - neg_bv
+        for _ in range(neg_bv):
+            schedule.append({"type": "brand_voice", "target": "off_brand"})
+        for _ in range(pos_bv):
+            schedule.append({"type": "brand_voice", "target": "on_brand"})
 
         # Accuracy distribution — expand each (count_each, label) pair into individual specs.
         # Variable renamed from ``count`` to ``count_each`` to avoid shadowing the parameter.

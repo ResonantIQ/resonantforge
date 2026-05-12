@@ -100,6 +100,7 @@ def cli() -> None:
 @click.option("--replay-out", "replay_out", default=None, type=click.Path(), help="Root directory for replay envelopes (default: ./replay_corpus). Envelopes use already-extracted claims — no extra LLM cost.")
 @click.option("--no-replay", "no_replay", is_flag=True, default=False, help="Skip replay envelope writing entirely.")
 @click.option("--smoke", "smoke", is_flag=True, default=False, help=f"Smoke-test mode: {_SMOKE_ACCOUNTS} accounts × {_SMOKE_MONTHS} months (~50 conversations). Mutually exclusive with --accounts/--months.")
+@click.option("--negative-rate", "negative_rate", default=0.5, show_default=True, type=float, help="Fraction of planted dimension slots to assign failing targets (0.0–1.0). Default: 0.5.")
 def generate(
     profile: str,
     accounts: Optional[int],
@@ -114,6 +115,7 @@ def generate(
     replay_out: Optional[str],
     no_replay: bool,
     smoke: bool,
+    negative_rate: float,
 ) -> None:
     """Run the corpus generation pipeline."""
     import sys as _sys
@@ -180,6 +182,7 @@ def generate(
         verbose=verbose,
         force=force,
         replay_corpus_dir=resolved_replay_dir,
+        negative_rate=negative_rate,
     )
 
     mode_label = "dry-run" if effective_api_key is None else "live"

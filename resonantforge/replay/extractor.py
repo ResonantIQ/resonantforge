@@ -138,17 +138,82 @@ def _brand_voice_config(profile_name: str) -> BrandVoiceConfig:
     return BrandVoiceConfig(variant_id=variant_id, feature_profiles=feature_profiles)
 
 
+def _derive_expected_failures(
+    quality_plan: "QualityPlan | None",
+) -> tuple[dict, str]:
+    """
+    Derive expected_failures dict and expected_outcome string from a QualityPlan.
+
+    Maps rubric_targets onto the four scoreable dimensions:
+    - empathy: True when target is "low"
+    - resolution: True when target is "weak"
+    - brand_voice: True when target is "off_brand"
+    - accuracy: True when status is "contradicted" OR precision is a failure mode
+      ("overgeneralized", "missing_constraint", "condition_missed")
+
+    claim_extraction and layer1_signal are not yet derived from rubric targets
+    and always default to False.
+
+    Returns (expected_failures dict, expected_outcome string) where expected_outcome
+    is "fail" if any dimension is True, "pass" if all False, "uncertain" when no plan.
+    """
+    _ACCURACY_FAILURE_PRECISIONS = {"overgeneralized", "missing_constraint", "condition_missed"}
+
+    if quality_plan is None:
+        return (
+            {
+                "accuracy": False,
+                "empathy": False,
+                "resolution": False,
+                "brand_voice": False,
+                "claim_extraction": False,
+                "layer1_signal": False,
+            },
+            "uncertain",
+        )
+
+    rt = quality_plan.rubric_targets
+    acc = rt.accuracy
+
+    accuracy_fail = bool(
+        acc is not None
+        and (
+            acc.status == "contradicted"
+            or acc.precision in _ACCURACY_FAILURE_PRECISIONS
+        )
+    )
+
+    ef = {
+        "accuracy": accuracy_fail,
+        "empathy": rt.empathy == "low",
+        "resolution": rt.resolution == "weak",
+        "brand_voice": rt.brand_voice_target == "off_brand",
+        "claim_extraction": False,
+        "layer1_signal": False,
+    }
+    outcome = "fail" if any(ef[k] for k in ("accuracy", "empathy", "resolution", "brand_voice")) else "pass"
+    return ef, outcome
+
+
 def _write_label_template(
     output_dir: Path,
     conv_id: str,
     *,
     skipped_during_generation: bool = False,
+    quality_plan: "QualityPlan | None" = None,
 ) -> None:
-    """Write an empty labels.json template if one doesn't already exist."""
+    """Write a labels.json template if one doesn't already exist.
+
+    When quality_plan is provided, expected_failures and expected_outcome are
+    derived from rubric_targets so the label faithfully reflects what the forge
+    intended to generate. When quality_plan is None (organic / no plan), the
+    template falls back to all-False / "uncertain" as before.
+    """
     label_path = output_dir / "labels.json"
     if label_path.exists():
         return  # never overwrite human-authored labels
 
+    ef, outcome = _derive_expected_failures(quality_plan)
     tags = ["skipped_during_generation"] if skipped_during_generation else []
     template = {
         "schema_version": _SCHEMA_VERSION,
@@ -156,15 +221,8 @@ def _write_label_template(
         "label_version": 1,
         "labeled_at": "FILL_IN",
         "labeled_by": _LABEL_TEMPLATE_LABELED_BY,
-        "expected_outcome": "uncertain",
-        "expected_failures": {
-            "accuracy": False,
-            "empathy": False,
-            "resolution": False,
-            "brand_voice": False,
-            "claim_extraction": False,
-            "layer1_signal": False,
-        },
+        "expected_outcome": outcome,
+        "expected_failures": ef,
         "confidence": "low",
         "tags": tags,
         "rationale": "FILL_IN",
@@ -268,7 +326,12 @@ def write_single_envelope(
             json.dumps(envelope.model_dump(mode="json"), indent=2),
             encoding="utf-8",
         )
-        _write_label_template(output_dir, conv_id, skipped_during_generation=skipped_during_generation)
+        _write_label_template(
+            output_dir,
+            conv_id,
+            skipped_during_generation=skipped_during_generation,
+            quality_plan=quality_plan,
+        )
     except OSError as exc:
         # Transient I/O failure must never cascade to the smoke run.
         # Envelope is reproducible from corpus; corpus record durability is independent.

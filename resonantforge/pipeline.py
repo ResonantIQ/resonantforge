@@ -113,6 +113,7 @@ class PipelineConfig:
     # Organic conversations get an envelope with empty claims (non-accuracy dims replay).
     # Defaults to None (no envelopes written). rforge generate sets this automatically.
     replay_corpus_dir: Path | None = None
+    negative_rate: float = 0.5  # fraction of dimension slots with failing targets (0.0–1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -1287,7 +1288,11 @@ def _run_pipeline_inner(
     # 1d. Inject quality plans — passes real KB chunks so domain-based selection works.
     # QualityPlanInjector takes a seeded RNG (not a raw seed integer).
     injector_rng = random.Random(config.seed)
-    injector = QualityPlanInjector(rng=injector_rng, profile_name=profile.name)
+    injector = QualityPlanInjector(
+        rng=injector_rng,
+        profile_name=profile.name,
+        negative_fraction=config.negative_rate,
+    )
     quality_plans: list[QualityPlan] = injector.inject(
         events=events,
         snapshots=snapshots,
