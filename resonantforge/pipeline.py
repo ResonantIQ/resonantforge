@@ -740,6 +740,34 @@ def _write_skip_envelope(
     )
 
 
+_ACCURACY_NEGATIVE_PRECISIONS = frozenset({"overgeneralized", "missing_constraint", "condition_missed"})
+
+
+def _quality_plan_is_negative(quality_plan: "QualityPlan | None") -> bool:
+    """Return True if quality_plan has any dimension target that expects a failing conversation.
+
+    Negative-target conversations are intentionally bad prose; their post-gen validation
+    skips must not count against the prose_fact_rate gate (RFORGE-48).
+    """
+    if quality_plan is None:
+        return False
+    rt = quality_plan.rubric_targets
+    acc = rt.accuracy
+    accuracy_fail = bool(
+        acc is not None
+        and (
+            acc.status == "contradicted"
+            or acc.precision in _ACCURACY_NEGATIVE_PRECISIONS
+        )
+    )
+    return (
+        accuracy_fail
+        or rt.empathy == "low"
+        or rt.resolution == "weak"
+        or rt.brand_voice_target == "off_brand"
+    )
+
+
 def _generate_prose_for_chunk(
     conv_id: str,
     account_id: str,
@@ -882,7 +910,10 @@ def _generate_prose_for_chunk(
             except Exception as exc:  # noqa: BLE001
                 _log(config, f"  API error on attempt {attempt}: {exc}")
                 if attempt >= max_retries:
-                    skip_tracker.prose_fact_failures += 1
+                    if _quality_plan_is_negative(quality_plan):
+                        skip_tracker.negative_prose_fact_failures += 1
+                    else:
+                        skip_tracker.prose_fact_failures += 1
                     skip_tracker.total_skipped += 1
                     _progress("skipped: API error")
                     skipped_records.append(_make_skipped_record(
@@ -896,7 +927,10 @@ def _generate_prose_for_chunk(
         # ------------------------------------------------------------------
         # Stage 3 — post-generation validation (planted conversations only)
         # ------------------------------------------------------------------
-        skip_tracker.prose_fact_attempts += 1
+        if _quality_plan_is_negative(quality_plan):
+            skip_tracker.negative_prose_fact_attempts += 1
+        else:
+            skip_tracker.prose_fact_attempts += 1
 
         if quality_plan is not None and anthropic_client is not None:
             # Post-generation validation only runs for live LLM-generated prose.
@@ -1038,7 +1072,10 @@ def _generate_prose_for_chunk(
                 _progress("passed")
                 break
             elif post_result.overall_verdict == ValidationVerdict.SKIP:
-                skip_tracker.prose_fact_failures += 1
+                if _quality_plan_is_negative(quality_plan):
+                    skip_tracker.negative_prose_fact_failures += 1
+                else:
+                    skip_tracker.prose_fact_failures += 1
                 skip_tracker.total_skipped += 1
                 _log(config, f"  POST-GEN SKIP {conv_id}: {post_result.skip_reason}")
                 _progress(f"skipped: {post_result.skip_reason or 'validation'}")
@@ -1073,7 +1110,10 @@ def _generate_prose_for_chunk(
             break
     else:
         # Retry loop exhausted without break (should not occur — SKIP path returns above).
-        skip_tracker.prose_fact_failures += 1
+        if _quality_plan_is_negative(quality_plan):
+            skip_tracker.negative_prose_fact_failures += 1
+        else:
+            skip_tracker.prose_fact_failures += 1
         skip_tracker.total_skipped += 1
         _progress("skipped: retries exhausted")
         skipped_records.append(_make_skipped_record(

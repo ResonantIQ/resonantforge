@@ -41,9 +41,13 @@ class SkipRateTracker:
     because a single skip may be attributed to more than one failure class.
     """
 
-    # Prose-fact violations (post-gen validation on event-log facts): gate at 10%
+    # Prose-fact violations on POSITIVE-target conversations (post-gen validation): gate at 10%
+    # Negative-target conversations are excluded — they intentionally produce bad prose.
     prose_fact_attempts: int = 0
     prose_fact_failures: int = 0
+    # Prose-fact skips on NEGATIVE-target conversations (informational, not gated)
+    negative_prose_fact_attempts: int = 0
+    negative_prose_fact_failures: int = 0
     # Validator rule failures on planted-quality (gate at 2%)
     quality_rule_attempts: int = 0
     quality_rule_failures: int = 0
@@ -59,8 +63,13 @@ class SkipRateTracker:
 
     @property
     def prose_fact_rate(self) -> float:
-        """Failure rate for prose-fact checks; 0.0 when no attempts recorded."""
+        """Failure rate for positive-target prose-fact checks; 0.0 when no attempts recorded."""
         return self.prose_fact_failures / max(1, self.prose_fact_attempts)
+
+    @property
+    def negative_prose_fact_rate(self) -> float:
+        """Failure rate for negative-target prose-fact checks (informational); 0.0 when no attempts."""
+        return self.negative_prose_fact_failures / max(1, self.negative_prose_fact_attempts)
 
     @property
     def quality_rule_rate(self) -> float:
