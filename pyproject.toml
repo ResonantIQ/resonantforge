@@ -11,7 +11,7 @@ dependencies = [
     "anthropic>=0.25",
     "click>=8.0",
     "rich>=15.0.0",
-    "pytest>=8.0",
+    "pytest>=9.0.3",
 ]
 
 [project.scripts]
