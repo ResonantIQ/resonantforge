@@ -4,7 +4,7 @@ Thank you for your interest in contributing to ResonantForge.
 
 ## Filing issues
 
-Use [GitHub Issues](https://github.com/resonantiq/resonantforge/issues) for bug reports, feature requests, and documentation improvements. Please search existing issues before opening a new one.
+Use [GitHub Issues](https://github.com/ResonantIQ/resonantforge/issues) for bug reports, feature requests, and documentation improvements. Please search existing issues before opening a new one.
 
 The maintainer team uses Jira for internal sprint coordination. External contributors should use GitHub Issues — Jira is not accessible to the public and you do not need to create a Jira ticket to contribute.
 
@@ -26,23 +26,13 @@ The maintainer team uses Jira for internal sprint coordination. External contrib
 
 ## Code style
 
-ResonantForge uses [ruff](https://docs.astral.sh/ruff/) for formatting and linting.
-
-Before submitting:
-
-```bash
-ruff format .
-ruff check .
-```
-
-Both must be clean. The `pyproject.toml` contains the configuration.
+Follow PEP 8. No formatting or linting tool is currently enforced in CI, but keep code consistent with the surrounding style.
 
 ## Running tests
 
 ```bash
-cd harness
 pip install -e .
 pytest tests/
 ```
 
-All tests must pass before a PR can be merged.
+All tests must pass on Python 3.11 and 3.12 before a PR can be merged.
