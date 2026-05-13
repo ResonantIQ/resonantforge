@@ -255,16 +255,16 @@ def _call_anthropic(
     """
     Call the Anthropic API and return the generated text plus cache usage counters.
 
-    Uses claude-haiku-4-5-20251001 with a conservative max_tokens to keep costs
-    reasonable during corpus generation runs.  Raises on API errors — the caller
-    handles retries.
+    Uses claude-haiku-4-5-20251001 by default (overridable via RFORGE_MODEL env var)
+    with a conservative max_tokens to keep costs reasonable during corpus generation
+    runs.  Raises on API errors — the caller handles retries.
 
-    Prompt caching was evaluated and removed: the system prompt at ~83 tokens is
-    25× below Haiku's 2048-token minimum cache threshold, so cache_control blocks
-    were silently ignored by the API.  See docs/resonantforge/cache-diagnosis.md.
-    The return shape still includes (text, 0, 0) so the cache telemetry shell in
-    _run_pipeline_inner compiles without change — re-enabling caching only requires
-    updating this function and crossing the token threshold.
+    Prompt caching is not active: the system prompt at ~83 tokens is 25× below
+    Haiku's 2048-token minimum cache threshold, so cache_control blocks would be
+    silently ignored by the API.  The return shape still includes (text, 0, 0) so
+    the cache telemetry shell in _run_pipeline_inner compiles without change —
+    re-enabling caching only requires updating this function and crossing the token
+    threshold.
 
     Args:
         client:        Pre-initialized Anthropic client (created once per run).
@@ -279,8 +279,9 @@ def _call_anthropic(
         raise RuntimeError(
             "anthropic package is not installed. Install it with: pip install anthropic"
         )
+    _model = os.environ.get("RFORGE_MODEL", "claude-haiku-4-5-20251001")
     response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model=_model,
         max_tokens=1024,
         system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],

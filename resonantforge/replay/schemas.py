@@ -2,8 +2,8 @@
 Pydantic models for replay corpus artifacts: envelopes, labels, and replay results.
 
 These schemas enforce the v1 contracts defined in:
-  harness/docs/replay-envelope-schema.md
-  harness/docs/replay-label-schema.md
+  docs/replay-envelope-schema.md
+  docs/replay-label-schema.md
 """
 from __future__ import annotations
 
@@ -115,7 +115,7 @@ class ReplayEnvelope(BaseModel):
     Self-contained snapshot of every input a validator needs to reproduce its
     verdict without calling any LLM or external service.
 
-    Schema version 1. See harness/docs/replay-envelope-schema.md.
+    Schema version 1. See docs/replay-envelope-schema.md.
     """
 
     schema_version: int
@@ -172,7 +172,7 @@ class ReplayLabels(BaseModel):
     """
     Human-authored ground truth for one conversation envelope.
 
-    Schema version 1. See harness/docs/replay-label-schema.md.
+    Schema version 1. See docs/replay-label-schema.md.
     """
 
     schema_version: int

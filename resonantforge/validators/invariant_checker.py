@@ -5,8 +5,7 @@ NOTE: The invariant checker operates strictly at the single-chunk level, with th
 sole exception of controlled-vocabulary checks. Cross-chunk claim comparison is
 intentionally NOT supported. Forge KB chunks are test fixtures, and chunks tagged
 to different gates may legitimately contradict each other on numeric claims, time
-windows, conditional thresholds, and similar test material. See
-docs/resonantforge/saas-invariants.md for the design rationale.
+windows, conditional thresholds, and similar test material.
 
 Two named concerns:
   validate_chunk_structure(chunk)  — per-chunk structural rules
