@@ -4,7 +4,7 @@ from resonantforge.profiles.base import (
     Profile, LifecycleStageConfig, SignalDescriptor, SurfaceChannel,
     PersonaArchetype, AgentHistoryTemplate, CorrectionPattern, ValueMetric, ReferenceSurface
 )
-from resonantforge.schemas import BrandVoiceVariant, CoachingStyleOverlay, KBChunk
+from resonantforge.schemas import BrandVoiceVariant, CoachingStyleOverlay, KBChunk, OffBrandVariantSpec
 from resonantforge.profiles.lexicons import saas as saas_lex
 from resonantforge.kb.saas_content import get_saas_kb_chunks
 
@@ -201,6 +201,64 @@ class SaaSProfile(Profile):
                     "to ensure we've understood correctly before acting."
                 ),
                 feature_profile=saas_lex.BRAND_VOICE_FEATURE_PROFILES.get("bv_warm_exploratory"),
+                permitted_patterns=[
+                    "Contractions: 'let's', 'we'll', 'don't', 'you're', 'I'd'",
+                    "First-person plural: 'let's figure this out', 'we can look into this together'",
+                    "Exploratory questions: 'Can you tell me more about...?', 'What were you trying to do when this happened?'",
+                    "Empathy openers: 'I completely understand how frustrating that must be', 'That makes total sense'",
+                    "Warm sign-offs: 'Happy to help!', 'Let me know if there's anything else', 'Hope that clears things up!'",
+                    "Enthusiasm markers: 'Great question!', 'Absolutely!', 'Of course!'",
+                ],
+                forbidden_patterns=[
+                    "Formal imperatives without softening: 'Navigate to...', 'Execute the following steps'",
+                    "No-contraction formality: 'I am unable to', 'You will need to', 'It is necessary'",
+                    "Clinical diagnosis framing: 'The issue has been identified as', 'Root cause analysis indicates'",
+                    "Emotionless closures: 'This concludes the resolution.', 'No further action is required.'",
+                    "Impersonal third-person: 'The system will', 'The platform does not support'",
+                ],
+                off_brand_variants={
+                    "clinical_detached": OffBrandVariantSpec(
+                        permitted_patterns=[
+                            "Formal imperatives: 'Navigate to Settings.', 'Select the option.', 'Enter the value.'",
+                            "No contractions: write 'do not', 'you will', 'it is', 'I am' — never 'don't', 'you'll', 'it's', 'I'm'",
+                            "Step-numbered instructions: '1. Open the dashboard. 2. Click Integrations. 3. Select...'",
+                            "Passive or impersonal constructions: 'The request has been submitted.', 'The error occurs when...'",
+                            "Factual closures: 'The issue is resolved.', 'No further action is required on your end.'",
+                            "Escalation language: 'This has been escalated to Tier 2.', 'A ticket has been created.'",
+                        ],
+                        forbidden_patterns=[
+                            "Any contraction: 'let's', 'we'll', 'don't', 'you're', 'I'd', 'that's', 'it's'",
+                            "Empathy or emotional acknowledgment: 'I understand how frustrating', 'That makes total sense', 'I'm sorry you're dealing with this'",
+                            "Exploratory questions: 'Can you tell me more?', 'What were you hoping to do?'",
+                            "Enthusiasm or warmth markers: 'Great!', 'Absolutely!', 'Happy to help!', 'Of course!'",
+                            "First-person plural partnership: 'let's figure this out together', 'we can look into this'",
+                            "Informal sign-offs: 'Hope that helps!', 'Let me know if you need anything else!'",
+                            "Casual filler: 'So', 'Just', 'Actually', 'Basically', 'No worries'",
+                        ],
+                    ),
+                    # TODO: define robotic variant — monotone acknowledgments, no initiative, ticket-reference heavy
+                    "robotic": OffBrandVariantSpec(
+                        permitted_patterns=[
+                            "Ticket references: 'Your case number is [ID].', 'Ticket [ID] has been updated.'",
+                            "Scripted acknowledgments: 'Thank you for contacting support.', 'Your issue has been logged.'",
+                        ],
+                        forbidden_patterns=[
+                            "Any spontaneous initiative or proactive help",
+                            "Personalised language beyond the customer's name",
+                        ],
+                    ),
+                    # TODO: define aggressive variant — terse, impatient, blame-shifting
+                    "aggressive": OffBrandVariantSpec(
+                        permitted_patterns=[
+                            "Blame-shift language: 'As stated in our documentation...', 'This is a known limitation.'",
+                            "Terse rejections: 'That is not supported.', 'We cannot assist with that.'",
+                        ],
+                        forbidden_patterns=[
+                            "Apologies or empathy of any kind",
+                            "Offers of further help",
+                        ],
+                    ),
+                },
             ),
             BrandVoiceVariant(
                 id="bv_direct_clinical",
@@ -218,6 +276,21 @@ class SaaSProfile(Profile):
                     "we act on the most reasonable interpretation of the customer's request."
                 ),
                 feature_profile=saas_lex.BRAND_VOICE_FEATURE_PROFILES.get("bv_direct_clinical"),
+                permitted_patterns=[
+                    "Formal imperatives: 'Navigate to...', 'Select...', 'Enter...'",
+                    "No contractions: 'do not', 'you will', 'it is', 'I am'",
+                    "Numbered step sequences for multi-step instructions",
+                    "Direct factual statements without hedging",
+                    "Active voice: 'Click the button', 'Open the settings panel'",
+                ],
+                forbidden_patterns=[
+                    "Contractions of any kind",
+                    "Exclamation marks",
+                    "Emotionally-loaded language or empathy openers",
+                    "Colloquialisms or filler words",
+                    "Clarifying questions unless strictly necessary",
+                ],
+                off_brand_variants={},
             ),
         ]
 

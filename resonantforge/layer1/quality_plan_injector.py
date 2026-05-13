@@ -8,8 +8,9 @@ from resonantforge.kb.constraint_extractor import extract_constraints
 from resonantforge.kb.kb_fact_extractor import extract_facts
 from resonantforge.kb.negation import negate_fact
 from resonantforge.schemas import (
-    ConstraintType, KBChunk, PlantedContradiction, QualityPlan, RubricTarget, AccuracyLabel,
-    KnowledgeCitations, SimEvent, SimEventType, DaySnapshot, LifecycleStage,
+    BrandVoiceVariant, ConstraintType, KBChunk, OffBrandVariantSpec, PlantedContradiction,
+    QualityPlan, RubricTarget, AccuracyLabel, KnowledgeCitations, SimEvent, SimEventType,
+    DaySnapshot, LifecycleStage,
 )
 from resonantforge.layer1.plan_validator import PlanValidator
 
@@ -115,23 +116,94 @@ def _resolution_target_for_index(i: int) -> str:
     return _CYCLE[i % 3]
 
 
-def _prose_directive_for_brand_voice(target: str, variant: str) -> str:
+def _pick_off_brand_variant_id(conv_id: str, off_brand_variants: dict) -> str:
     """
-    Return a plain-English prose generation directive for the brand voice dimension.
+    Pick a variant name from off_brand_variants deterministically by conversation ID.
 
-    ``off_brand`` deliberately mismatches the brand voice spec; ``on_brand``
-    requires strict adherence to sentence length, question frequency, and vocabulary.
+    Uses sorted key order so dict insertion order never affects selection.
+    Hash is computed over the conv_id string to give uniform distribution across
+    the variant set without introducing an external RNG dependency.
     """
-    if target == "off_brand":
+    keys = sorted(off_brand_variants.keys())
+    return keys[hash(conv_id) % len(keys)]
+
+
+def _render_off_brand_directive(variant_spec: OffBrandVariantSpec) -> str:
+    """
+    Render a self-contained off-brand prose directive from a variant spec.
+
+    Lists permitted and forbidden patterns explicitly so the LLM never needs
+    to infer the brand voice spec from context. The directive is intentionally
+    imperative and repetitive to resist the model's trained tendency toward
+    warm, helpful support language.
+    """
+    use_lines = "\n".join(f"  - {p}" for p in variant_spec.permitted_patterns)
+    avoid_lines = "\n".join(f"  - {p}" for p in variant_spec.forbidden_patterns)
+    return (
+        "IMPORTANT: Write this conversation in a tone that is deliberately off-brand. "
+        "Ignore your defaults for warm, helpful support language. Follow these rules exactly.\n\n"
+        f"YOU MUST USE these patterns (apply all of them):\n{use_lines}\n\n"
+        f"YOU MUST AVOID these patterns (violations will cause rejection):\n{avoid_lines}"
+    )
+
+
+def _prose_directive_for_brand_voice(
+    target: str,
+    variant_id: str,
+    brand_voice_variants: list[BrandVoiceVariant],
+    conv_id: str = "",
+) -> tuple[str, str | None]:
+    """
+    Return a (directive_text, resolved_off_brand_variant_id) pair for the brand voice dimension.
+
+    For ``on_brand``: directive instructs adherence to the voice's permitted patterns;
+    resolved_off_brand_variant_id is None.
+
+    For ``off_brand``: locates the target BrandVoiceVariant by ID, picks the off-brand
+    variant deterministically from its off_brand_variants map, and renders a concrete
+    USE/AVOID directive from the variant spec. resolved_off_brand_variant_id is the
+    chosen variant name (e.g. "clinical_detached").
+
+    Args:
+        target:               "on_brand" or "off_brand".
+        variant_id:           Brand voice variant ID (e.g. "bv_warm_exploratory").
+        brand_voice_variants: All BrandVoiceVariant objects from the profile.
+        conv_id:              Conversation ID used for deterministic variant selection.
+
+    Returns:
+        Tuple of (directive_text, off_brand_variant_id_or_None).
+    """
+    bv_map = {v.id: v for v in brand_voice_variants}
+    voice = bv_map.get(variant_id)
+
+    if target == "on_brand":
+        if voice and voice.permitted_patterns:
+            use_lines = "\n".join(f"  - {p}" for p in voice.permitted_patterns)
+            directive = (
+                "Agent should write strictly within the brand voice spec provided. "
+                "Use these patterns consistently throughout the conversation:\n"
+                f"{use_lines}"
+            )
+        else:
+            directive = (
+                "Agent should write strictly within the brand voice spec provided. "
+                "Match sentence length, question frequency, hedging style, and vocabulary to the spec."
+            )
+        return directive, None
+
+    # off_brand path
+    if voice is None or not voice.off_brand_variants:
+        # Fallback when spec is missing or voice has no off-brand variants defined.
         return (
             "Agent should write in a tone that deliberately mismatches the brand voice spec. "
-            "If the brand voice is warm-exploratory, use clinical direct language. "
-            "If the brand voice is direct-clinical, use warm colloquial language."
+            "Avoid all warmth, contractions, and collaborative language. Use terse, formal, impersonal language.",
+            None,
         )
-    return (
-        "Agent should write strictly within the brand voice spec provided. "
-        "Match sentence length, question frequency, hedging style, and vocabulary to the spec."
-    )
+
+    chosen_variant_id = _pick_off_brand_variant_id(conv_id, voice.off_brand_variants)
+    chosen_spec = voice.off_brand_variants[chosen_variant_id]
+    directive = _render_off_brand_directive(chosen_spec)
+    return directive, chosen_variant_id
 
 
 def _render_chunk_blocks(header: str, chunks: list[KBChunk]) -> str:
@@ -262,23 +334,33 @@ class QualityPlanInjector:
     def __init__(
         self,
         rng: random.Random,
+        profile=None,  # type: ignore[type-arg]  # Profile instance
         profile_name: str = "saas",
         negative_fraction: float = 0.5,
     ):
         """
-        Initialise the injector with a seeded RNG and a profile name.
+        Initialise the injector with a seeded RNG and a profile object.
 
         Args:
             rng:               A seeded ``random.Random`` instance — all shuffles and
                                picks go through this so corpus generation is deterministic.
+            profile:           A concrete Profile instance (SaaSProfile, PSProfile, etc.).
+                               Used to look up brand_voice_variants() for directive rendering.
+                               When None, falls back to profile_name for backward compat.
             profile_name:      Profile label (``"saas"`` or ``"ps"``); controls which
-                               planted count is expected from the caller.
+                               planted count is expected from the caller. Ignored when
+                               ``profile`` is provided.
             negative_fraction: Fraction of dimension slots to assign a failing target.
                                0.0 → all passing (high/strong/on_brand); 1.0 → all
                                failing (low/weak/off_brand); default 0.5.
         """
         self.rng = rng
-        self.profile_name = profile_name
+        if profile is not None:
+            self.profile_name = profile.name
+            self._brand_voice_variants = profile.brand_voice_variants()
+        else:
+            self.profile_name = profile_name
+            self._brand_voice_variants = []
         self.negative_fraction = negative_fraction
         self.validator = PlanValidator()
         # Pool-starvation telemetry — accumulated during inject(), read by pipeline.
@@ -639,12 +721,19 @@ class QualityPlanInjector:
             coaching_dim = "resolution"
 
         elif spec["type"] == "brand_voice":
+            _bv_directive, _off_brand_variant_id = _prose_directive_for_brand_voice(
+                target=spec["target"],
+                variant_id="bv_warm_exploratory",
+                brand_voice_variants=self._brand_voice_variants,
+                conv_id=conv_event.event_id,
+            )
             rubric = RubricTarget(
                 brand_voice_against="bv_warm_exploratory",
                 brand_voice_target=spec["target"],
+                off_brand_variant_id=_off_brand_variant_id,
             )
             citations = KnowledgeCitations()
-            directives = _prose_directive_for_brand_voice(spec["target"], "bv_warm_exploratory")
+            directives = _bv_directive
             cat11_gate = None
             multi_chunk = False
             kb_required = []

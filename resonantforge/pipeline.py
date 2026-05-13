@@ -1330,7 +1330,7 @@ def _run_pipeline_inner(
     injector_rng = random.Random(config.seed)
     injector = QualityPlanInjector(
         rng=injector_rng,
-        profile_name=profile.name,
+        profile=profile,
         negative_fraction=config.negative_rate,
     )
     quality_plans: list[QualityPlan] = injector.inject(

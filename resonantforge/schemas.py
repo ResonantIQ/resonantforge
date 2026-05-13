@@ -187,6 +187,7 @@ class RubricTarget(BaseModel):
     resolution: Optional[Literal["weak", "guided", "strong"]] = None
     brand_voice_against: Optional[str] = None  # brand voice variant ID
     brand_voice_target: Optional[Literal["on_brand", "off_brand"]] = None
+    off_brand_variant_id: Optional[str] = None  # resolved off-brand variant name (e.g. "clinical_detached")
     accuracy: Optional[AccuracyLabel] = None
 
 
@@ -832,21 +833,49 @@ class Manifest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class OffBrandVariantSpec(BaseModel):
+    """
+    Concrete behavioural spec for one named off-brand tone variant.
+
+    ``permitted_patterns`` lists phrases/constructions the agent MUST use in this
+    variant (e.g. formal imperatives, no contractions).  ``forbidden_patterns``
+    lists phrases/constructions the agent MUST NOT use (e.g. exclamations, slang).
+    Both lists are rendered verbatim into the prose generation directive so the
+    LLM receives explicit, self-contained instructions without needing to infer
+    the brand voice spec from context.
+    """
+
+    permitted_patterns: list[str]
+    forbidden_patterns: list[str]
+
+
 class BrandVoiceVariant(BaseModel):
     """
-    A named brand voice specification paired with calibrated feature ranges.
+    A named brand voice specification paired with calibrated feature ranges and
+    off-brand variant definitions.
 
     ``content`` is a ~150-200 word prose description of the brand voice, written
     in the second person (e.g. "You are warm, conversational, …"). It is injected
     directly into the prose generator prompt. ``feature_profile`` holds calibrated
     numeric ranges used by the brand-voice validator to distinguish on-brand from
     off-brand responses for this particular variant.
+
+    ``permitted_patterns`` and ``forbidden_patterns`` are concrete phrase lists
+    that characterise this on-brand voice; used to derive on-brand directive text.
+
+    ``off_brand_variants`` maps variant name → OffBrandVariantSpec. Each entry
+    defines a distinct off-brand antipode (e.g. "clinical_detached", "robotic").
+    Must be declared on every voice; use ``{}`` when no off-brand variants are
+    defined for that voice yet.
     """
 
     id: str  # e.g. "bv_warm_exploratory"
     label: str
     content: str  # ~150-200 word brand voice spec
     feature_profile: Optional[dict[str, Any]] = None  # calibrated ranges for validator
+    permitted_patterns: list[str]
+    forbidden_patterns: list[str]
+    off_brand_variants: dict[str, OffBrandVariantSpec]
 
 
 class CoachingStyleOverlay(BaseModel):
