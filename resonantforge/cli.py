@@ -101,6 +101,7 @@ def cli() -> None:
 @click.option("--no-replay", "no_replay", is_flag=True, default=False, help="Skip replay envelope writing entirely.")
 @click.option("--smoke", "smoke", is_flag=True, default=False, help=f"Smoke-test mode: {_SMOKE_ACCOUNTS} accounts × {_SMOKE_MONTHS} months (~50 conversations). Mutually exclusive with --accounts/--months.")
 @click.option("--negative-rate", "negative_rate", default=0.5, show_default=True, type=float, help="Fraction of planted dimension slots to assign failing targets (0.0–1.0). Default: 0.5.")
+@click.option("--force-replay-out", "force_replay_out", is_flag=True, default=False, help="Skip the frozen-directory guard and allow overwriting existing replay envelopes.")
 def generate(
     profile: str,
     accounts: Optional[int],
@@ -116,6 +117,7 @@ def generate(
     no_replay: bool,
     smoke: bool,
     negative_rate: float,
+    force_replay_out: bool,
 ) -> None:
     """Run the corpus generation pipeline."""
     import sys as _sys
@@ -171,6 +173,31 @@ def generate(
         resolved_replay_dir = Path(replay_out)
     else:
         resolved_replay_dir = Path("replay_corpus")
+
+    # Frozen-directory guard (RFORGE-60): refuse to silently overwrite frozen replay
+    # envelopes when the default replay_corpus path already contains envelopes for
+    # this profile.  This protects against the common footgun where `rforge generate`
+    # is invoked from harness/ and the default ./replay_corpus resolves to the checked-in
+    # reference envelopes at harness/replay_corpus/saas/.
+    #
+    # The guard fires when ALL of these are true:
+    #   1. replay output is not disabled (--no-replay not passed)
+    #   2. existing envelope.json files are found under resolved_replay_dir/<profile>/*/
+    #   3. --force-replay-out was not passed
+    if resolved_replay_dir is not None and not force_replay_out:
+        existing_envelopes = list(resolved_replay_dir.glob(f"{profile}/*/envelope.json"))
+        if existing_envelopes:
+            console.print(
+                f"[bold red]Error:[/bold red] Replay output directory already contains "
+                f"{len(existing_envelopes)} frozen envelope(s) for profile [bold]{profile}[/bold]:\n"
+                f"  [cyan]{resolved_replay_dir / profile}[/cyan]\n\n"
+                "Overwriting these would silently destroy frozen reference envelopes.\n"
+                "Safe alternatives:\n"
+                "  [bold]--no-replay[/bold]            — skip replay envelope writing entirely\n"
+                "  [bold]--replay-out <path>[/bold]    — write envelopes to a different directory\n"
+                "  [bold]--force-replay-out[/bold]     — override this guard and overwrite anyway"
+            )
+            sys.exit(1)
 
     config = PipelineConfig(
         profile_name=profile,

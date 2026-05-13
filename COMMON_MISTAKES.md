@@ -43,6 +43,31 @@ A running log of footguns discovered in production. Each entry cites the inciden
 
 **Rule:** `_write_label_template` in `extractor.py` checks `label_path.exists()` and returns early if the file is already present. Never remove this guard.
 
+### rforge generate silently overwrites frozen replay envelopes (RFORGE-60)
+
+**Symptom:** Running `rforge generate` from the `harness/` directory (or any directory whose CWD sibling is `replay_corpus/`) silently overwrites the checked-in frozen reference envelopes in `harness/replay_corpus/saas/`. Human-authored `labels.json` files are the only thing preserved (because `_write_label_template` guards them), but the machine-generated `envelope.json` files are destroyed and regenerated — making the replay harness non-deterministic and invalidating any validator iteration work done against those envelopes.
+
+**Cause:** `rforge generate` defaulted `--replay-out` to `Path("replay_corpus")` relative to CWD. When invoked from `harness/`, this resolved to `harness/replay_corpus/` — exactly where the frozen reference corpus lives.
+
+**Why it was dangerous:** The corpus is non-deterministic across LLM invocations even with the same seed. Re-generating envelopes means the `extracted_claims` in each envelope will differ from the human-labelled ground truth that was validated against the original claims. The result is a silent accuracy regression: `rforge replay run` agreement rates drift with no warning.
+
+**Fixed in RFORGE-60:** `rforge generate` now detects existing envelopes at the resolved replay output path before running the pipeline. If `<replay-out>/<profile>/*/envelope.json` matches anything, the command prints a clear error and exits(1) with three safe alternatives:
+
+```
+Error: Replay output directory already contains N frozen envelope(s) for profile saas:
+  /path/to/replay_corpus/saas
+
+Overwriting these would silently destroy frozen reference envelopes.
+Safe alternatives:
+  --no-replay            — skip replay envelope writing entirely
+  --replay-out <path>    — write envelopes to a different directory
+  --force-replay-out     — override this guard and overwrite anyway
+```
+
+Use `--force-replay-out` only when intentionally regenerating a reference corpus after a profile or pipeline change that requires a full envelope refresh.
+
+---
+
 ### Free-form strings in labels.json tags
 
 **Problem:** Tags like `"borderlne"` (typo of `"borderline"`) silently create phantom categories in aggregate tag breakdowns.
