@@ -1,43 +1,83 @@
 # ResonantForge
 
-Deterministic synthetic customer-conversation corpus generator for the Resonant IQ intelligence test harness.
+ResonantForge is a Python CLI that generates synthetic two-party conversation corpora with planted quality signals — built for testing and evaluating systems that score, classify, route, or analyze structured conversations. Point it at a profile, give it a seed, and it produces a realistic corpus of dialogue transcripts complete with quality-signal annotations, source-document citations, participant trajectories, and planted human review corrections. The simulation layer is fully deterministic from `--seed`; in `--dry-run` mode the entire output is bit-identical across runs, and in live mode the structure, metadata, and signal annotations are reproducible while the LLM-generated prose itself varies per call.
 
-## Overview
+The shipped profiles model customer-support conversations (SaaS and professional services verticals), but the architecture is domain-agnostic. Subclassing `Profile` lets you generate corpora for any two-party conversation domain — sales calls, onboarding flows, technical interviews, advisory sessions, intake conversations, or anything else that fits a two-participant structure.
 
-ResonantForge generates a reproducible corpus of customer-support conversations with planted quality signals, KB citations, agent trajectories, and human corrections. Given the same `--seed`, it produces bit-for-bit identical output, enabling CI-stable regression tests for every intelligence algorithm built on top of it.
+> **Pre-release.** This is v0.2.0. APIs and output formats may change before the stable release. Feedback welcome via [GitHub Issues](https://github.com/ResonantIQ/resonantforge/issues).
+
+## Who it's for
+
+ResonantForge is built for engineers and teams building conversation evaluation systems — anyone who needs realistic, controlled, reproducible dialogue data to test scoring pipelines, validate classifiers, or benchmark routing logic without exposing real user conversations. The deterministic core makes it practical to use as a stable CI fixture. The profile system makes it adaptable to whatever conversation domain you actually work in.
 
 ## Requirements
 
 - Python 3.11+
-- `pip install -e .` (installs `pydantic`, `anthropic`, `click`, `rich`, `pytest`)
+- pip
+- (Optional) An Anthropic API key for live prose generation
 
-## Quick start
+## 60-second quickstart
+
+No API key needed to start — `--dry-run` skips all LLM calls and generates deterministic placeholder prose.
 
 ```bash
-cd harness
+git clone https://github.com/ResonantIQ/resonantforge
+cd resonantforge
 pip install -e .
 rforge --help
+rforge generate --dry-run --smoke
 ```
 
-## Structure
+This produces a smoke corpus (~100 conversations) under the default output directory `./corpus/saas/`. Inspect what was generated:
 
-```
-resonantforge/
-  schemas.py          # All Pydantic v2 data models (source of truth)
-  cli.py              # Click CLI entry point
-  layer1/             # Account simulation engine (event stream)
-  validators/         # Rule-based per-dimension signal validation
-    extractors/       # Signal extraction from raw prose
-  kb/                 # Knowledge base document and chunk management
-  profiles/           # Tenant brand-voice and rubric profiles
-    lexicons/         # Domain-specific vocabulary lists
-  agents/             # Synthetic agent fixtures and trajectory logic
-  corrections/        # Planted human score corrections (Section 11.3)
-  tenant_config/      # Per-tenant configuration loading
-tests/
-  test_properties.py  # 22-assertion property test suite (Task 17)
+```bash
+rforge stats corpus --profile saas
+rforge inspect corpus --profile saas
 ```
 
-## Determinism guarantee
+**For live corpus generation** (calls the Anthropic API; a smoke run costs a few cents, a full run costs a few dollars at current Haiku pricing):
 
-All randomness is seeded from a single integer passed via `--seed`. The generator uses Python's `random.Random(seed)` (never the global state) so parallel runs with different seeds are independent.
+```bash
+export ANTHROPIC_API_KEY=your-key-here
+rforge generate --smoke
+```
+
+You can override the model with `RFORGE_MODEL` if you want to use something other than the current default (`claude-haiku-4-5-20251001`).
+
+## CLI overview
+
+| Command | What it does |
+|---|---|
+| `rforge generate` | Run the corpus generation pipeline. Produces JSONL artifacts under `./corpus/<profile>/`. |
+| `rforge validate <corpus_dir> --profile <name>` | Verify a generated corpus against its manifest. |
+| `rforge inspect <corpus_dir> --profile <name>` | Print sample records from each corpus artifact. |
+| `rforge stats <corpus_dir> --profile <name>` | Print manifest statistics, skip rates, and determinism hashes. |
+| `rforge replay extract-envelopes` | Freeze validator inputs into replay envelopes. One LLM call per conversation; run once. |
+| `rforge replay run` | Run all validators against frozen envelopes at zero LLM cost. Use this for validator iteration. |
+
+### Key `generate` flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--profile` | `saas` | Profile name: `saas` or `professional_services` |
+| `--seed` | `42` | Deterministic PRNG seed. Same seed → identical simulation structure. |
+| `--smoke` | off | Smoke mode: ~100 conversations instead of the full default. |
+| `--dry-run` | off | Skip LLM calls; use placeholder prose. No API key required. |
+| `--accounts N` | profile default | Number of synthetic accounts to simulate. |
+| `--months N` | profile default | Duration of simulation in months. |
+| `--out-root PATH` | `./corpus` | Root directory for output. Corpus lands at `<out-root>/<profile>/`. |
+
+## Extending ResonantForge
+
+To generate corpora for a new domain, subclass `Profile` from `resonantforge/profiles/base.py`. A profile defines the brand voice variants the simulated participants use, the knowledge base chunks the corpus can cite, the lexicons that drive rule-based signal extraction, the volume of planted-quality conversations to inject, and the correction patterns used to model human reviewer noise. The abstract base class enforces the interface — unimplemented methods raise `NotImplementedError` until overridden, so gaps surface immediately rather than silently producing empty outputs.
+
+The current pipeline assumes a two-party dialogue structure (two participants alternating turns). Adapting Forge to multi-party conversations, monologues, or non-dialogue formats would require pipeline-level changes beyond a `Profile` subclass.
+
+See `resonantforge/profiles/base.py` for the full interface and `resonantforge/profiles/saas.py` for a complete worked example.
+
+## Links
+
+- [LICENSE](LICENSE)
+- [CONTRIBUTING](CONTRIBUTING.md)
+- [Known limitations and footguns](COMMON_MISTAKES.md)
+- [GitHub Issues](https://github.com/ResonantIQ/resonantforge/issues)
