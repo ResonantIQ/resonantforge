@@ -7,7 +7,7 @@ name = "resonantforge"
 version = "0.2.0"
 requires-python = ">=3.11"
 dependencies = [
-    "pydantic>=2.0",
+    "pydantic>=2.13.4",
     "anthropic>=0.102.0",
     "click>=8.3.3",
     "rich>=15.0.0",
