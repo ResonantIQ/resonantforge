@@ -72,7 +72,7 @@ def _make_conv_event(event_id: str, domain: str = "billing") -> SimEvent:
 
 
 def _conditional_applied_plans(plans):
-    """Extract supported:conditional_applied plans that have a direct accuracy spec (not rerouted control)."""
+    """Extract supported:conditional_applied plans that have a direct accuracy spec (not rerouted control or distractor)."""
     return [
         p for p in plans
         if (
@@ -80,6 +80,7 @@ def _conditional_applied_plans(plans):
             and p.rubric_targets.accuracy.status == "supported"
             and p.rubric_targets.accuracy.precision == "conditional_applied"
             and p.rubric_targets.empathy is None  # accuracy spec, not control plan
+            and not p.is_distractor
         )
     ]
 

@@ -180,6 +180,19 @@ def format_summary(results: list[ReplayResult]) -> str:
     else:
         lines.append("  All rules matched labels exactly.")
 
+    distractor_results = [r for r in results if "distractor" in r.labels.tags]
+    if distractor_results:
+        distractor_fp = sum(
+            1 for r in distractor_results if "accuracy" in r.agreement.false_positive_rules
+        )
+        n_distractor = len(distractor_results)
+        lines.append("")
+        lines.append(
+            f"Distractor FP rate: {distractor_fp}/{n_distractor} "
+            f"({_pct(distractor_fp, n_distractor)}) "
+            f"— accuracy fired on paraphrase-trap conversations"
+        )
+
     return "\n".join(lines)
 
 

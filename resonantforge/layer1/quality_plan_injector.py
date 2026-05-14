@@ -214,6 +214,19 @@ def _render_chunk_blocks(header: str, chunks: list[KBChunk]) -> str:
     return f"\n\n{header}\n---\n{blocks}\n---"
 
 
+def _prose_directive_for_distractor(should_cite: list[KBChunk]) -> str:
+    """Directive for paraphrase-trap conversations: correct facts, own wording (RFORGE-73)."""
+    base = (
+        "The agent must state the KB policy facts CORRECTLY and accurately. "
+        "However, the agent should rephrase using their own words rather than quoting directly — "
+        "for example, using synonyms ('reimburse' for 'refund', 'working days' for 'business days', "
+        "'eligible for' for 'entitled to'). Every constraint, condition, and numeric limit must still "
+        "appear in the response. Do NOT omit any restriction. Do NOT state anything incorrect."
+    )
+    base += _render_chunk_blocks("Relevant KB policy content (state accurately, in your own words):", should_cite)
+    return base
+
+
 def _prose_directive_for_accuracy(
     label: AccuracyLabel,
     should_cite: list[KBChunk],
@@ -379,6 +392,7 @@ class QualityPlanInjector:
         planted_count: int = 50,
         kb_chunks: list[KBChunk] | None = None,
         include_adversarial_in_should_cite: bool = False,
+        distractor_count: int = 2,
     ) -> list[QualityPlan]:
         """
         Pick conversations from the event log and generate quality plans.
@@ -426,7 +440,7 @@ class QualityPlanInjector:
         assigned_ids: set[str] = set()
 
         # Build the plan schedule
-        schedule = self._build_schedule(planted_count)
+        schedule = self._build_schedule(planted_count, distractor_count=distractor_count)
 
         for i, plan_spec in enumerate(schedule):
             if i >= len(available):
@@ -480,16 +494,20 @@ class QualityPlanInjector:
 
         return plans
 
-    def _build_schedule(self, count: int) -> list[dict]:
+    def _build_schedule(self, count: int, distractor_count: int = 2) -> list[dict]:
         """
         Build an ordered list of plan specifications for each planted conversation.
 
         Produces exactly ``count`` spec dicts. Starts with 2 all-clean controls,
         then distributes the remainder across 4 rubric dimensions. Accuracy slots
         are filled from ACCURACY_DISTRIBUTION in order (3 each of 4 label types).
+        Distractor slots are carved from the accuracy budget (RFORGE-73).
 
         Args:
-            count: Total number of plan specs to generate.
+            count:            Total number of plan specs to generate.
+            distractor_count: Number of distractor (paraphrase-trap) slots to carve
+                              from the accuracy budget. Clamped to the available
+                              accuracy budget. Default 2.
 
         Returns:
             List of spec dicts, each with a ``"type"`` key and dimension-specific fields.
@@ -528,15 +546,22 @@ class QualityPlanInjector:
         for _ in range(pos_bv):
             schedule.append({"type": "brand_voice", "target": "on_brand"})
 
+        # Accuracy budget: per_dim slots + leftover. Distractors carved from this budget.
+        accuracy_budget = per_dim + leftover
+        actual_distractor_count = min(distractor_count, accuracy_budget)
+        accuracy_slots = accuracy_budget - actual_distractor_count
+
         # Accuracy distribution — expand each (count_each, label) pair into individual specs.
         # Variable renamed from ``count`` to ``count_each`` to avoid shadowing the parameter.
         accuracy_items = []
         for count_each, label in ACCURACY_DISTRIBUTION:
             for _ in range(count_each):
                 accuracy_items.append({"type": "accuracy", "label": label})
-        # Take as many as fit in per_dim slots plus any leftover
-        for item in accuracy_items[:per_dim + leftover]:
+        for item in accuracy_items[:accuracy_slots]:
             schedule.append(item)
+
+        for _ in range(actual_distractor_count):
+            schedule.append({"type": "distractor"})
 
         return schedule
 
@@ -686,6 +711,7 @@ class QualityPlanInjector:
         coaching_dim: str
         planted_constraint: str | None = None
         planted_contradiction: PlantedContradiction | None = None
+        is_distractor: bool = False
 
         if spec["type"] == "control":
             rubric = ALL_CLEAN_TARGETS
@@ -738,6 +764,19 @@ class QualityPlanInjector:
             multi_chunk = False
             kb_required = []
             coaching_dim = "brand_voice"
+
+        elif spec["type"] == "distractor":
+            # Paraphrase-trap: agent states KB fact correctly but with synonym rephrase.
+            # Expected outcome is pass — used to measure accuracy FP rate (RFORGE-73).
+            _distractor_cite_chunks = [c for c in kb_chunks if c.chunk_id in allow_ids]
+            rubric = RubricTarget(accuracy=AccuracyLabel(status="supported", precision="exact"))
+            citations = KnowledgeCitations(should_cite=allow_ids[:1], must_not_cite=[])
+            directives = _prose_directive_for_distractor(_distractor_cite_chunks[:1])
+            cat11_gate = None
+            multi_chunk = False
+            kb_required = allow_ids[:1]
+            coaching_dim = "accuracy"
+            is_distractor = True
 
         else:  # accuracy
             label: AccuracyLabel = spec["label"]
@@ -937,4 +976,5 @@ class QualityPlanInjector:
             planted_constraint=planted_constraint,
             planted_contradiction=planted_contradiction,
             target_branch=target_branch,
+            is_distractor=is_distractor,
         )

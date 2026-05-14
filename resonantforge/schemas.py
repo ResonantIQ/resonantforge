@@ -245,6 +245,7 @@ class QualityPlan(BaseModel):
     planted_constraint: Optional[str] = None  # normalized constraint phrase for overgeneralization events
     planted_contradiction: Optional[PlantedContradiction] = None  # fact/negation pair for contradicted:exact events
     target_branch: Optional[str] = None  # branch id for conditional_applied plans on multi-branch chunks (RFORGE-37)
+    is_distractor: bool = False  # True for paraphrase-trap conversations that test false-positive rate (RFORGE-73)
 
 
 # ---------------------------------------------------------------------------

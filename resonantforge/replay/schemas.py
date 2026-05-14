@@ -11,7 +11,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from resonantforge.schemas import Claim, KBChunk, QualityPlan
+from resonantforge.schemas import Claim, KBChunk, PlantedContradiction, QualityPlan
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +163,7 @@ VALID_TAGS = frozenset({
     "planted",
     "organic",
     "skipped_during_generation",
+    "distractor",
 })
 
 REQUIRED_FAILURE_KEYS = frozenset({"accuracy", "empathy", "resolution", "brand_voice", "claim_extraction", "layer1_signal"})
@@ -238,6 +239,51 @@ class ReplayLabels(BaseModel):
                 "revision audit trail is incomplete"
             )
         return self
+
+
+# ---------------------------------------------------------------------------
+# Answer key
+# ---------------------------------------------------------------------------
+
+_ANSWER_KEY_SCHEMA_VERSION = 1
+
+
+class AccuracyAnswerDetail(BaseModel):
+    """Oracle detail for accuracy-targeted conversations."""
+
+    status: str
+    precision: str
+    planted_constraint: Optional[str] = None
+    planted_contradiction: Optional[PlantedContradiction] = None
+    is_distractor_trap: bool = False  # True when this is a paraphrase-trap conversation (RFORGE-73)
+
+
+class AnswerKey(BaseModel):
+    """
+    Machine-readable oracle for one conversation.
+
+    Written alongside envelope.json at generate/extract time.
+    Schema version 1. See docs/answer-key-schema.md.
+    """
+
+    schema_version: int
+    conv_id: str
+    is_planted: bool
+    coaching_target_dimension: Optional[str] = None
+    expected_outcome: Literal["pass", "fail", "uncertain"]
+    expected_failures: dict[str, bool]
+    severity: Optional[Literal["high", "medium"]] = None
+    accuracy_detail: Optional[AccuracyAnswerDetail] = None
+    kb_chunks_required: list[str] = Field(default_factory=list)
+
+    @field_validator("schema_version")
+    @classmethod
+    def _require_v1(cls, v: int) -> int:
+        if v != _ANSWER_KEY_SCHEMA_VERSION:
+            raise ValueError(
+                f"AnswerKeySchemaError: expected schema_version={_ANSWER_KEY_SCHEMA_VERSION}, got {v}"
+            )
+        return v
 
 
 # ---------------------------------------------------------------------------
