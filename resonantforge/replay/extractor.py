@@ -16,7 +16,9 @@ from typing import Any, Callable, Iterator, Optional
 from resonantforge.pipeline import _load_lexicons, _split_prose_turns
 from resonantforge.profiles import get_profile
 from resonantforge.replay.schemas import (
+    AccuracyAnswerDetail,
     AccuracyValidatorInputs,
+    AnswerKey,
     BrandVoiceConfig,
     EnvelopeLexicons,
     EnvelopeMetadata,
@@ -195,6 +197,66 @@ def _derive_expected_failures(
     return ef, outcome
 
 
+_ACCURACY_HIGH_SEVERITY: frozenset[str] = frozenset({"contradicted:exact"})
+_ACCURACY_MEDIUM_SEVERITY: frozenset[str] = frozenset({
+    "contradicted:overgeneralized",
+    "contradicted:conditional_applied",
+    "supported:overgeneralized",
+})
+
+
+def _derive_severity(quality_plan: "QualityPlan") -> "str | None":
+    """Return 'high', 'medium', or None based on the rubric targets."""
+    rt = quality_plan.rubric_targets
+    if rt.accuracy is not None:
+        key = f"{rt.accuracy.status}:{rt.accuracy.precision}"
+        if key in _ACCURACY_HIGH_SEVERITY:
+            return "high"
+        if key in _ACCURACY_MEDIUM_SEVERITY:
+            return "medium"
+    if rt.empathy == "low" or rt.resolution == "weak" or rt.brand_voice_target == "off_brand":
+        return "medium"
+    return None
+
+
+def _derive_answer_key(conv_id: str, quality_plan: "QualityPlan") -> AnswerKey:
+    """Build an AnswerKey from a QualityPlan — no I/O."""
+    ef, outcome = _derive_expected_failures(quality_plan)
+    is_planted = quality_plan.coaching_target_dimension is not None
+
+    rt = quality_plan.rubric_targets
+    accuracy_detail: "AccuracyAnswerDetail | None" = None
+    if rt.accuracy is not None:
+        accuracy_detail = AccuracyAnswerDetail(
+            status=rt.accuracy.status,
+            precision=rt.accuracy.precision,
+            planted_constraint=quality_plan.planted_constraint,
+            planted_contradiction=quality_plan.planted_contradiction,
+            is_distractor_trap=quality_plan.is_distractor,
+        )
+
+    return AnswerKey(
+        schema_version=1,
+        conv_id=conv_id,
+        is_planted=is_planted,
+        coaching_target_dimension=quality_plan.coaching_target_dimension,
+        expected_outcome=outcome,
+        expected_failures=ef,
+        severity=_derive_severity(quality_plan) if is_planted else None,
+        accuracy_detail=accuracy_detail,
+        kb_chunks_required=quality_plan.kb_chunks_required,
+    )
+
+
+def _write_answer_key(output_dir: Path, conv_id: str, quality_plan: "QualityPlan") -> None:
+    """Write answer_key.json if it does not already exist (never overwrites)."""
+    key_path = output_dir / "answer_key.json"
+    if key_path.exists():
+        return
+    key = _derive_answer_key(conv_id, quality_plan)
+    key_path.write_text(json.dumps(key.model_dump(mode="json"), indent=2), encoding="utf-8")
+
+
 def _write_label_template(
     output_dir: Path,
     conv_id: str,
@@ -215,6 +277,10 @@ def _write_label_template(
 
     ef, outcome = _derive_expected_failures(quality_plan)
     tags = ["skipped_during_generation"] if skipped_during_generation else []
+    if quality_plan is not None and quality_plan.is_distractor:
+        tags.append("distractor")
+    else:
+        tags.append("planted")
     template = {
         "schema_version": _SCHEMA_VERSION,
         "conv_id": conv_id,
@@ -332,6 +398,7 @@ def write_single_envelope(
             skipped_during_generation=skipped_during_generation,
             quality_plan=quality_plan,
         )
+        _write_answer_key(output_dir, conv_id, quality_plan)
     except OSError as exc:
         # Transient I/O failure must never cascade to the smoke run.
         # Envelope is reproducible from corpus; corpus record durability is independent.
