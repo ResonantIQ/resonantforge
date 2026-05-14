@@ -149,7 +149,8 @@ def _sha256_jsonl(lines: list[str]) -> str:
     h = hashlib.sha256()
     for line in lines:
         h.update(line.encode("utf-8"))
-        h.update(b"\n")
+        h.update(b"
+")
     return h.hexdigest()
 
 
@@ -158,7 +159,8 @@ def _write_jsonl(path: Path, lines: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as fh:
         for line in lines:
-            fh.write(line + "\n")
+            fh.write(line + "
+")
 
 
 def _group_events_by_chunk(
@@ -210,6 +212,11 @@ def _build_prompt(
         "Write a realistic, natural dialogue between a customer and a support agent. "
         "The conversation should be 4-12 turns. Format each turn as 'Customer: ...' or 'Agent: ...' "
         "on its own line. Do not add any preamble or metadata — output only the conversation."
+        "
+
+IMPORTANT: The agent must never ask the customer to share passwords, API keys, tokens, "
+        "or other secrets in the chat. If credentials are relevant, the agent should direct the "
+        "customer to a secure portal or masked input method."
     )
 
     channel = conv_event.payload.get("surface_channel", "chat")
@@ -222,26 +229,39 @@ def _build_prompt(
         dominant_health = month_summary.get("dominant_health_state", "healthy")
         payment_failures = month_summary.get("payment_failures", 0)
         health_info = (
-            f"\n\nAccount context for month {month_index}:"
-            f"\n- Average health score: {avg_health:.2f}"
-            f"\n- Dominant health state: {dominant_health}"
-            f"\n- Payment failures this month: {payment_failures}"
+            f"
+
+Account context for month {month_index}:"
+            f"
+- Average health score: {avg_health:.2f}"
+            f"
+- Dominant health state: {dominant_health}"
+            f"
+- Payment failures this month: {payment_failures}"
         )
 
     plan_section = ""
     if quality_plan is not None:
         plan_section = (
-            f"\n\nQuality directives (follow these exactly):\n{quality_plan.prose_generation_directives}"
+            f"
+
+Quality directives (follow these exactly):
+{quality_plan.prose_generation_directives}"
         )
 
     user_prompt = (
         f"Generate a customer-support conversation on the {channel} channel."
-        f"\nCustomer: {customer}"
-        f"\nAgent ID: {agent_id}"
-        f"\nAccount: {account_id}"
+        f"
+Customer: {customer}"
+        f"
+Agent ID: {agent_id}"
+        f"
+Account: {account_id}"
         f"{health_info}"
         f"{plan_section}"
-        "\n\nWrite the conversation now:"
+        "
+
+Write the conversation now:"
     )
 
     return system_prompt, user_prompt
@@ -540,7 +560,9 @@ def _split_prose_turns(prose: str) -> tuple[str, str]:
             agent_lines.append(stripped[len("Agent:"):].strip())
         elif stripped.startswith("Customer:"):
             customer_lines.append(stripped[len("Customer:"):].strip())
-    return "\n".join(agent_lines), "\n".join(customer_lines)
+    return "
+".join(agent_lines), "
+".join(customer_lines)
 
 
 def _load_lexicons(profile) -> LexiconsBundle:  # type: ignore[type-arg]
@@ -892,10 +914,14 @@ def _generate_prose_for_chunk(
             # Dry-run: generate deterministic placeholder prose.
             prose = (
                 f"[DRY RUN] conv_id={conv_id} account={account_id} "
-                f"month={month_index} attempt={attempt}\n"
-                "Customer: I need help with my account.\n"
-                "Agent: I'd be happy to help you today. What seems to be the issue?\n"
-                "Customer: I can't access the dashboard.\n"
+                f"month={month_index} attempt={attempt}
+"
+                "Customer: I need help with my account.
+"
+                "Agent: I'd be happy to help you today. What seems to be the issue?
+"
+                "Customer: I can't access the dashboard.
+"
                 "Agent: I understand. Let me look into that for you right away."
             )
         else:
@@ -1766,9 +1792,11 @@ def _run_pipeline_inner(
 
     # Abort after manifest write so the run is inspectable.
     if gate_errors:
-        error_messages = "\n".join(f"  • {e.message}" for e in gate_errors)
+        error_messages = "
+".join(f"  • {e.message}" for e in gate_errors)
         raise RuntimeError(
-            f"Quality gate(s) exceeded — aborting corpus run:\n{error_messages}"
+            f"Quality gate(s) exceeded — aborting corpus run:
+{error_messages}"
         )
 
     return manifest
