@@ -210,6 +210,9 @@ def _build_prompt(
         "Write a realistic, natural dialogue between a customer and a support agent. "
         "The conversation should be 4-12 turns. Format each turn as 'Customer: ...' or 'Agent: ...' "
         "on its own line. Do not add any preamble or metadata — output only the conversation."
+        "\n\nIMPORTANT: The agent must never ask the customer to share passwords, API keys, tokens, "
+        "or other secrets in the chat. If credentials are relevant, the agent should direct the "
+        "customer to a secure portal or masked input method."
     )
 
     channel = conv_event.payload.get("surface_channel", "chat")
