@@ -77,13 +77,13 @@ See `resonantforge/profiles/base.py` for the full interface and `resonantforge/p
 
 ## Prior art
 
-ResonantForge builds on two pieces of recent work:
+ResonantForge sits within a small wave of recent work on synthetic ground-truth corpora for AI evaluation. Two projects directly shaped it:
 
-**[OrgForge](https://arxiv.org/abs/2603.14997)** (Flynt, 2026) introduced the physics-cognition boundary that ResonantForge applies to two-party conversations: a deterministic engine maintains the SimEvent ground-truth bus, and LLMs operate only at designated injection points, generating surface prose from validated proposals rather than mutating state directly. This makes cross-artifact consistency an architectural guarantee rather than an empirical claim. Where OrgForge models multi-artifact organizational corpora (Slack, JIRA, email, postmortems), ResonantForge applies the same boundary to dialogue transcripts with planted quality signals.
+**[gbrain-evals](https://github.com/garrytan/gbrain-evals)** (Garry Tan) was the project that first showed me that fictional ground-truth corpora — synthetic worlds with planted facts and perturbations — were a viable foundation for evaluating AI systems. The approach of seeding deterministic fictional content with controlled perturbations to test what a system can actually detect runs through both projects, though our specific architectures differ.
 
-**[BrainBench](https://github.com/braingpt-lovelab/BrainBench)** (Luo et al., 2024) introduced the contrastive evaluation pattern that ResonantForge uses for scoring: present two versions of an artifact — one ground-truth, one altered to shift a specific property while remaining coherent — and measure whether a system can identify which is which. ResonantForge adapts this from neuroscience abstracts to conversation prose with planted quality variations.
+**[OrgForge](https://arxiv.org/abs/2603.14997)** (Flynt, 2026) introduced the physics-cognition boundary that ResonantForge implements directly: a deterministic engine maintains the SimEvent ground-truth bus, and LLMs operate only at designated injection points, generating surface prose from validated proposals rather than mutating state directly. Forge's `QualityPlanInjector` and `SimEvent` registry are this pattern applied to two-party conversations rather than multi-artifact organizational corpora.
 
-If you're working in this space, the OrgForge paper and codebase are the most direct architectural predecessor to ResonantForge and worth reading.
+If you're working in this space, both are worth your time.
 
 ## Links
 
