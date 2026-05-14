@@ -4,7 +4,7 @@ ResonantForge is a Python CLI that generates synthetic two-party conversation co
 
 The shipped profiles model customer-support conversations (SaaS and professional services verticals), but the architecture is domain-agnostic. Subclassing `Profile` lets you generate corpora for any two-party conversation domain — sales calls, onboarding flows, technical interviews, advisory sessions, intake conversations, or anything else that fits a two-participant structure.
 
-> **Pre-release.** This is v0.2.0. APIs and output formats may change before the stable release. Feedback welcome via [GitHub Issues](https://github.com/ResonantIQ/resonantforge/issues).
+> **v0.2.0** — initial public release. Output formats and APIs may evolve in future versions; pin to a specific version if you need stability. Feedback welcome via [GitHub Issues](https://github.com/ResonantIQ/resonantforge/issues).
 
 ## Who it's for
 
@@ -74,6 +74,16 @@ To generate corpora for a new domain, subclass `Profile` from `resonantforge/pro
 The current pipeline assumes a two-party dialogue structure (two participants alternating turns). Adapting Forge to multi-party conversations, monologues, or non-dialogue formats would require pipeline-level changes beyond a `Profile` subclass.
 
 See `resonantforge/profiles/base.py` for the full interface and `resonantforge/profiles/saas.py` for a complete worked example.
+
+## Prior art
+
+ResonantForge builds on two pieces of recent work:
+
+**[OrgForge](https://arxiv.org/abs/2603.14997)** (Flynt, 2026) introduced the physics-cognition boundary that ResonantForge applies to two-party conversations: a deterministic engine maintains the SimEvent ground-truth bus, and LLMs operate only at designated injection points, generating surface prose from validated proposals rather than mutating state directly. This makes cross-artifact consistency an architectural guarantee rather than an empirical claim. Where OrgForge models multi-artifact organizational corpora (Slack, JIRA, email, postmortems), ResonantForge applies the same boundary to dialogue transcripts with planted quality signals.
+
+**[BrainBench](https://github.com/braingpt-lovelab/BrainBench)** (Luo et al., 2024) introduced the contrastive evaluation pattern that ResonantForge uses for scoring: present two versions of an artifact — one ground-truth, one altered to shift a specific property while remaining coherent — and measure whether a system can identify which is which. ResonantForge adapts this from neuroscience abstracts to conversation prose with planted quality variations.
+
+If you're working in this space, the OrgForge paper and codebase are the most direct architectural predecessor to ResonantForge and worth reading.
 
 ## Links
 
