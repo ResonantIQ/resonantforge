@@ -25,7 +25,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from resonantforge.agents.generator import generate_agents
 from resonantforge.corrections.generator import generate_corrections
@@ -218,6 +218,12 @@ def _build_prompt(
     channel = conv_event.payload.get("surface_channel", "chat")
     customer = conv_event.payload.get("customer_name", f"Customer_{account_id}")
     agent_id = conv_event.payload.get("agent_id", "agent_unknown")
+    # Contact role (present once ContactPlanner has attributed the conversation to
+    # a specific customer contact) — gives the prose a consistent speaker identity.
+    contact_role = conv_event.payload.get("contact_role")
+    customer_line = (
+        f"{customer} ({contact_role.replace('_', ' ')})" if contact_role else customer
+    )
 
     health_info = ""
     if month_summary:
@@ -239,7 +245,7 @@ def _build_prompt(
 
     user_prompt = (
         f"Generate a customer-support conversation on the {channel} channel."
-        f"\nCustomer: {customer}"
+        f"\nCustomer: {customer_line}"
         f"\nAgent ID: {agent_id}"
         f"\nAccount: {account_id}"
         f"{health_info}"
@@ -327,6 +333,12 @@ def _make_conversation_record(
     started_at = conv_event.timestamp
     ended_at = started_at + timedelta(minutes=10)
 
+    # Customer-contact attribution stamped onto the event payload by the
+    # ContactPlanner. None on pre-contact-modeling corpora.
+    contact_id = conv_event.payload.get("contact_id")
+    contact_role = conv_event.payload.get("contact_role")
+    contact_name = conv_event.payload.get("customer_name") if contact_id else None
+
     return ConversationRecord(
         conversation_id=conv_id,
         account_id=account_id,
@@ -341,6 +353,10 @@ def _make_conversation_record(
         tone_variant=None,
         planted_constraint=quality_plan.planted_constraint if quality_plan is not None else None,
         planted_contradiction=quality_plan.planted_contradiction if quality_plan is not None else None,
+        contact_id=contact_id,
+        contact_name=contact_name,
+        contact_role=contact_role,
+        is_champion_contact=bool(conv_event.payload.get("is_champion_contact", False)),
     )
 
 
@@ -1687,6 +1703,46 @@ def _run_pipeline_inner(
     planted_quality_hash = _sha256_jsonl(plan_lines)
     atomic_write_jsonl(profile_dir / "planted_quality.jsonl", plan_lines)
 
+    # Serialise customer contacts (Phase 1 data). Contacts are the first-class
+    # customer-side entities the relationship churn detectors track.
+    contacts = sm.contacts
+    contact_lines = [c.model_dump_json() for c in contacts]
+    contacts_hash = _sha256_jsonl(contact_lines)
+    atomic_write_jsonl(profile_dir / "contacts.jsonl", contact_lines)
+
+    # Serialise relationship-signal ground-truth labels (Phase 1 data). Two labels
+    # per account (champion-at-risk + single-threaded), computed by pure mirrors
+    # of the engine's Rules 4 & 5 against the planted contact-engagement graph.
+    relationship_labels = sm.relationship_labels
+    rel_label_lines = [lab.model_dump_json() for lab in relationship_labels]
+    relationship_labels_hash = _sha256_jsonl(rel_label_lines)
+    atomic_write_jsonl(profile_dir / "relationship_labels.jsonl", rel_label_lines)
+
+    # Relationship planted-distribution telemetry for the audit: per-detector
+    # counts of positive / negative / decoy labels and scenario tallies.
+    _rel_dist: dict[str, Any] = {}
+    for lab in relationship_labels:
+        det = lab.detector.value
+        bucket = _rel_dist.setdefault(
+            det, {"positive": 0, "negative": 0, "decoy": 0, "total": 0}
+        )
+        bucket["total"] += 1
+        if lab.expected_fire:
+            bucket["positive"] += 1
+        else:
+            bucket["negative"] += 1
+            if lab.is_decoy:
+                bucket["decoy"] += 1
+    # Per-account scenario tally (each account has two labels sharing a scenario).
+    _rel_scenarios: dict[str, int] = {}
+    _seen_scen_accounts: set[str] = set()
+    for lab in relationship_labels:
+        if lab.account_id in _seen_scen_accounts:
+            continue
+        _seen_scen_accounts.add(lab.account_id)
+        _rel_scenarios[lab.scenario] = _rel_scenarios.get(lab.scenario, 0) + 1
+    _rel_dist["scenarios"] = _rel_scenarios
+
     # _kb_version already computed post-contamination in Phase 2.
 
     # domain_distribution_observed: count CONVERSATION_STARTED events per domain.
@@ -1725,6 +1781,8 @@ def _run_pipeline_inner(
         knowledge_base_chunk_count=kb_chunk_count,
         agent_count=len(agent_profiles),
         corrections_count=len(corrections),
+        contact_count=len(contacts),
+        relationship_label_count=len(relationship_labels),
         events_hash=events_hash,
         snapshots_hash=snapshots_hash,
         conversations_hash=conversations_hash,
@@ -1733,6 +1791,9 @@ def _run_pipeline_inner(
         tenant_config_hash=tenant_config_hash,
         agent_fixtures_hash=agents_hash,
         corrections_hash=corrections_hash,
+        contacts_hash=contacts_hash,
+        relationship_labels_hash=relationship_labels_hash,
+        relationship_signal_distribution=_rel_dist,
         prose_fact_violation_rate=skip_tracker.prose_fact_rate,
         validator_rule_failure_rate=skip_tracker.quality_rule_rate,
         disagreement_rate=skip_tracker.disagreement_rate,

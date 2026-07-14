@@ -288,6 +288,8 @@ def validate(corpus_dir: Path, profile: str) -> None:
             ("conversations.jsonl", manifest_data.get("conversation_count", 0)),
             ("planted_quality.jsonl", manifest_data.get("planted_quality_count", 0)),
             ("corrections.jsonl", manifest_data.get("corrections_count", 0)),
+            ("contacts.jsonl", manifest_data.get("contact_count", 0)),
+            ("relationship_labels.jsonl", manifest_data.get("relationship_label_count", 0)),
         ]
         for filename, expected_count in jsonl_specs:
             fpath = profile_dir / filename
@@ -385,6 +387,8 @@ def inspect(corpus_dir: Path, profile: str, limit: int) -> None:
         ("events.jsonl", "Events"),
         ("conversations.jsonl", "Conversations"),
         ("corrections.jsonl", "Corrections"),
+        ("contacts.jsonl", "Contacts"),
+        ("relationship_labels.jsonl", "Relationship labels"),
     ]
 
     for filename, label in artifacts:
@@ -512,8 +516,23 @@ def stats(corpus_dir: Path, profile: str) -> None:
     _section("Artifacts")
     _row("Corrections", manifest_data.get("corrections_count", ""))
     _row("Agents", manifest_data.get("agent_count", ""))
+    _row("Contacts", manifest_data.get("contact_count", ""))
+    _row("Relationship labels", manifest_data.get("relationship_label_count", ""))
     _row("KB docs", manifest_data.get("knowledge_base_doc_count", ""))
     _row("KB chunks", manifest_data.get("knowledge_base_chunk_count", ""))
+
+    # Relationship-signal planted distribution (per-detector positive/negative/decoy).
+    rel_dist = manifest_data.get("relationship_signal_distribution", {})
+    if rel_dist:
+        _section("Relationship signals (planted)")
+        for det in ("relationship_champion_at_risk", "relationship_single_threaded"):
+            b = rel_dist.get(det)
+            if b:
+                _row(
+                    det,
+                    f"{b.get('positive', 0)} positive · {b.get('negative', 0)} negative "
+                    f"({b.get('decoy', 0)} decoy) / {b.get('total', 0)}",
+                )
 
     # Quality rates.
     _section("Quality rates")
@@ -532,6 +551,8 @@ def stats(corpus_dir: Path, profile: str) -> None:
         ("tenant_config_hash", "Tenant config"),
         ("agent_fixtures_hash", "Agent fixtures"),
         ("corrections_hash", "Corrections"),
+        ("contacts_hash", "Contacts"),
+        ("relationship_labels_hash", "Relationship labels"),
     ]
     for field_name, label in hash_keys:
         h = manifest_data.get(field_name, "")

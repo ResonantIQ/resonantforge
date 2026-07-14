@@ -21,6 +21,16 @@ SIM_EVENT_REGISTRY: dict[str, list[str]] = {
     SimEventType.SCORE_CORRECTION: ["agent_id", "criterion", "original_score", "corrected_score"],
 }
 
+# Optional payload fields — permitted (and documented) but not required. Enrichers
+# that run after emission add these post-hoc. CONVERSATION_STARTED carries the
+# customer-contact attribution stamped by ContactPlanner (contact_id + role) and
+# the coverage-backfill target-gate hint. Keeping these here documents the full
+# payload vocabulary without forcing them at emission time, when they aren't yet
+# known (contacts are attributed once each account's realized lifespan is known).
+SIM_EVENT_OPTIONAL_FIELDS: dict[str, list[str]] = {
+    SimEventType.CONVERSATION_STARTED: ["contact_id", "contact_role", "backfill_target_gate"],
+}
+
 
 def validate_event_payload(event_type: SimEventType, payload: dict) -> list[str]:
     """
@@ -29,6 +39,9 @@ def validate_event_payload(event_type: SimEventType, payload: dict) -> list[str]
     Returns a list of missing required field names; an empty list means the
     payload is valid. Callers can use this to assert correctness during testing
     or to raise structured errors before emitting events into the stream.
+
+    Optional fields (see ``SIM_EVENT_OPTIONAL_FIELDS``) are never reported as
+    missing — they are enrichment fields added after emission.
     """
     required = SIM_EVENT_REGISTRY.get(event_type, [])
     return [f for f in required if f not in payload]

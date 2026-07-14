@@ -129,6 +129,16 @@ def test_determinism(tmp_path: Path) -> None:
         "snapshots_hash differs between two runs with the same seed — "
         f"run1={m1.snapshots_hash[:16]}… run2={m2.snapshots_hash[:16]}…"
     )
+    # Contact modeling must be deterministic too: contacts.jsonl and
+    # relationship_labels.jsonl are seed-derived and must be byte-identical.
+    assert m1.contacts_hash == m2.contacts_hash, (
+        "contacts_hash differs between two runs with the same seed — "
+        f"run1={m1.contacts_hash[:16]}… run2={m2.contacts_hash[:16]}…"
+    )
+    assert m1.relationship_labels_hash == m2.relationship_labels_hash, (
+        "relationship_labels_hash differs between two runs with the same seed — "
+        f"run1={m1.relationship_labels_hash[:16]}… run2={m2.relationship_labels_hash[:16]}…"
+    )
 
 
 # ---------------------------------------------------------------------------

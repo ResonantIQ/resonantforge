@@ -13,9 +13,12 @@ from resonantforge.schemas import (
     SimEventType,
     LifecycleStage,
     HealthState,
+    Contact,
+    RelationshipLabel,
 )
 from resonantforge.layer1.sim_events import validate_event_payload
 from resonantforge.layer1.clocks import ClockRegistry
+from resonantforge.layer1.contact_planner import ContactPlanner
 
 if TYPE_CHECKING:
     from resonantforge.layer1.coverage_backfill import CoverageBackfill
@@ -138,6 +141,11 @@ class StateMachine:
         self.base_date = date(2025, 7, 1)  # simulation starts 2025-07-01
         self.events: list[SimEvent] = []
         self.snapshots: list[DaySnapshot] = []
+        # Customer-contact modeling outputs — populated by the ContactPlanner
+        # pass at the end of simulate(). Read by the pipeline for artifact
+        # emission (contacts.jsonl + relationship_labels.jsonl).
+        self.contacts: list[Contact] = []
+        self.relationship_labels: list[RelationshipLabel] = []
         self._event_counter = 0
         self._snapshot_counter = 0
 
@@ -274,6 +282,23 @@ class StateMachine:
 
         for account in accounts:
             self._simulate_account(account)
+
+        # Customer-contact modeling: a single deterministic post-pass over the
+        # finished stream. It needs each account's realized lifespan (emergent
+        # from churn), so it runs after the day loop, not inside it. It generates
+        # contacts, attributes each conversation to a customer contact (mutating
+        # CONVERSATION_STARTED payloads), enriches DaySnapshots with the contact
+        # rollup, and emits ground-truth relationship labels. Uses a seed-derived
+        # RNG that never touches the event RNG stream above.
+        planner = ContactPlanner(
+            seed=self.seed,
+            accounts=accounts,
+            events=self.events,
+            snapshots=self.snapshots,
+        )
+        planner.plan()
+        self.contacts = planner.contacts
+        self.relationship_labels = planner.labels
 
         return self.events, self.snapshots
 
