@@ -59,6 +59,78 @@ class HealthState(str, Enum):
     CHURNED = "churned"
 
 
+class ContactRole(str, Enum):
+    """
+    Coarse classification of a customer-side contact's function on the account.
+
+    ``role`` is descriptive provenance for the synthetic relationship graph; the
+    Resonant IQ engine's champion detector keys off the separate
+    ``Contact.is_champion`` boolean, not this enum. Any role may be flagged a
+    champion, though in practice the advocate is usually a decision-maker or a
+    hands-on power user.
+    """
+
+    ECONOMIC_BUYER = "economic_buyer"
+    DECISION_MAKER = "decision_maker"
+    DAY_TO_DAY_USER = "day_to_day_user"
+    TECHNICAL_ADMIN = "technical_admin"
+    EXECUTIVE_SPONSOR = "executive_sponsor"
+
+
+class Contact(BaseModel):
+    """
+    A first-class customer-side contact on an account.
+
+    Contacts are the people the support/CS team engages with, distinct from the
+    tenant's own support agents (``AgentProfile``). Each conversation is
+    attributed to exactly one contact (``ConversationRecord.contact_id``), which
+    lets the Resonant IQ engine track specific relationships over time — the
+    prerequisite for the ``relationship_champion_at_risk`` and
+    ``relationship_single_threaded`` churn detectors.
+
+    ``is_champion`` marks the internal advocate driving adoption. ``first_seen_day_index``
+    / ``last_seen_day_index`` bound the contact's realized engagement window in
+    simulation-day terms (both ``-1`` if the contact never appears on a
+    conversation). ``engagement_count`` is the total attributed conversations.
+    ``relationship_scenario`` records which planted scenario placed this contact,
+    for corpus provenance and audit.
+    """
+
+    contact_id: str  # deterministic, e.g. "contact_acct_001_02"
+    account_id: str
+    name: str
+    role: ContactRole
+    is_champion: bool = False
+    first_seen_day_index: int = -1
+    last_seen_day_index: int = -1
+    engagement_count: int = 0
+    relationship_scenario: str = "null_multithreaded"
+
+
+class ContactRollup(BaseModel):
+    """
+    Per-champion contact state rolled up as-of a specific DaySnapshot day.
+
+    Mirrors the fields the Resonant IQ champion detector (Rule 4) reads so a
+    downstream scorer can evaluate the rule without replaying the event stream.
+    ``days_since_seen`` and ``engagement_frequency`` are relative to the owning
+    snapshot's day (the account's "now" when the snapshot is the last one).
+    Both are ``None`` if the champion has not yet engaged by that day.
+
+    ``engagement_frequency`` is touches/month over the trailing 3-month window
+    (``CONTACT_FREQUENCY_WINDOW_DAYS``), matching the engine's per-contact
+    frequency definition.
+    """
+
+    contact_id: str
+    name: str
+    role: ContactRole
+    is_champion: bool
+    last_seen_day_index: Optional[int] = None
+    days_since_seen: Optional[int] = None
+    engagement_frequency: Optional[float] = None
+
+
 class SimEvent(BaseModel):
     """
     A single discrete event emitted by the simulation engine.
@@ -99,6 +171,17 @@ class DaySnapshot(BaseModel):
     active_agents: list[str]  # agent IDs active this day
     payment_status: Literal["current", "overdue", "failed"]
     renewal_days_remaining: Optional[int] = None
+    # Contact-relationship rollup (RForge contact modeling). Pre-computed
+    # trailing-window aggregates over per-contact conversation attribution so
+    # downstream scorers can evaluate the engine's relationship churn detectors
+    # (Rules 4 & 5) without replaying events — mirroring how health_score is
+    # pre-rolled. All windows are trailing and end on this snapshot's day, so the
+    # final snapshot per account carries the account's as-of-"now" state.
+    # Defaults keep pre-contact-modeling constructors valid.
+    distinct_active_contacts_60d: int = 0  # distinct contacts on convs in trailing 60d
+    distinct_active_contacts_prior_180d: int = 0  # distinct contacts on convs 60–240d ago
+    total_contacts_all_time: int = 0  # distinct contacts engaged on/before this day
+    champion_rollups: list[ContactRollup] = Field(default_factory=list)  # one per champion, as-of this day
 
     @field_validator("health_score")
     @classmethod
@@ -128,6 +211,11 @@ class ConversationStartedPayload(BaseModel):
     agent_id: str
     domain: str  # e.g. "billing", "api", "refunds"
     intent: list[str] = Field(default_factory=list)  # e.g. ["how_to", "feature_request"]
+    # Contact attribution — populated by ContactPlanner after simulation, so the
+    # transcript's customer identity is the specific customer contact that
+    # participated. Optional because the raw event is emitted before attribution.
+    contact_id: Optional[str] = None
+    contact_role: Optional[str] = None
 
 
 class ConversationRecord(BaseModel):
@@ -155,6 +243,14 @@ class ConversationRecord(BaseModel):
     tone_variant: Optional[str] = None  # brand voice variant id if contaminated; None if dominant
     planted_constraint: Optional[str] = None  # normalized constraint phrase for overgeneralization events
     planted_contradiction: Optional[PlantedContradiction] = None  # fact/negation pair for contradicted:exact events
+    # Customer-contact attribution (RForge contact modeling). Identifies which
+    # customer contact participated, so transcript evidence is consistent with
+    # the planted relationship state. None on corpora generated before contact
+    # modeling.
+    contact_id: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_role: Optional[str] = None
+    is_champion_contact: bool = False
 
 
 class AccuracyLabel(BaseModel):
@@ -571,6 +667,46 @@ class DisagreementRecord(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Section 5b — Relationship-signal ground-truth labels
+# ---------------------------------------------------------------------------
+
+
+class RelationshipDetector(str, Enum):
+    """The two engine churn detectors that require per-contact relationship state."""
+
+    CHAMPION_AT_RISK = "relationship_champion_at_risk"
+    SINGLE_THREADED = "relationship_single_threaded"
+
+
+class RelationshipLabel(BaseModel):
+    """
+    Ground-truth label for one account × one relationship detector, evaluated at
+    the corpus "now" (the account's final snapshot day).
+
+    Labels are produced by the ContactPlanner using pure Python mirrors of the
+    engine's Rule 4 / Rule 5 logic, so ``expected_fire`` is by construction what
+    a correct detector must output given the planted contact-engagement graph.
+    The benchmark harness reads these to compute per-detector precision/recall/F1.
+
+    ``is_decoy`` marks near-miss negatives — accounts engineered to look like a
+    fire (champion who dipped but is still active; an account that narrowed to two
+    threads but not one) that a correct detector must NOT fire on. They make the
+    false-positive rate measurable, mirroring the RFORGE-73 paraphrase-trap
+    distractors. ``evidence`` carries the exact window values the decision rests
+    on, keyed the same as the engine's ``AccountChurnData`` fields.
+    """
+
+    account_id: str
+    detector: RelationshipDetector
+    expected_fire: bool  # True = should fire (positive); False = should not (negative/decoy)
+    is_decoy: bool = False  # near-miss negative that superficially looks like a fire
+    scenario: str  # planted scenario id, e.g. "single_threaded_positive"
+    as_of_day_index: int  # the final snapshot day this label is evaluated at
+    rationale: str
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
 # Section 6 — Agent profile schemas (Section 11.2)
 # ---------------------------------------------------------------------------
 
@@ -789,6 +925,8 @@ class Manifest(BaseModel):
     knowledge_base_chunk_count: int
     agent_count: int
     corrections_count: int
+    contact_count: int = 0
+    relationship_label_count: int = 0
     # Hashes (SHA-256 hex of corresponding NDJSON output files)
     events_hash: str
     snapshots_hash: str
@@ -798,6 +936,11 @@ class Manifest(BaseModel):
     tenant_config_hash: str
     agent_fixtures_hash: str
     corrections_hash: str
+    contacts_hash: str = ""
+    relationship_labels_hash: str = ""
+    # Relationship-signal planted distribution telemetry — per-detector counts of
+    # positive / negative / decoy / null labels, for the distribution audit.
+    relationship_signal_distribution: dict[str, Any] = Field(default_factory=dict)
     # Skip / disagreement rates
     prose_fact_violation_rate: float
     validator_rule_failure_rate: float
