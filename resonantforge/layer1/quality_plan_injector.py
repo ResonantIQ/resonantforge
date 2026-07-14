@@ -1,5 +1,6 @@
 """Quality plan injector — plants rubric-dimension targets into the organic event log."""
 
+import hashlib
 import logging
 import math
 import random
@@ -123,9 +124,16 @@ def _pick_off_brand_variant_id(conv_id: str, off_brand_variants: dict) -> str:
     Uses sorted key order so dict insertion order never affects selection.
     Hash is computed over the conv_id string to give uniform distribution across
     the variant set without introducing an external RNG dependency.
+
+    The digest MUST be a stable hash (blake2b), not the builtin ``hash()`` —
+    ``hash()`` on ``str`` is salted per process by PYTHONHASHSEED, which made the
+    chosen off-brand variant (and therefore ``planted_quality.jsonl``) differ
+    across otherwise-identical runs, breaking the ``--dry-run --smoke``
+    bit-identical determinism guarantee.
     """
     keys = sorted(off_brand_variants.keys())
-    return keys[hash(conv_id) % len(keys)]
+    digest = hashlib.blake2b(conv_id.encode("utf-8"), digest_size=8).digest()
+    return keys[int.from_bytes(digest, "big") % len(keys)]
 
 
 def _render_off_brand_directive(variant_spec: OffBrandVariantSpec) -> str:
